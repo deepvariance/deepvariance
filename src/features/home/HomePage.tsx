@@ -123,7 +123,7 @@ export function HomePage() {
                 Launch a new training run
               </Title>
 
-              <Text size="15px" c="dimmed" style={{ lineHeight: 1.6 }}>
+              <Text size="15px" c="dimmed">
                 Choose an uploaded dataset to kick off training immediately, or
                 import a new dataset to get started.
               </Text>
@@ -184,7 +184,7 @@ export function HomePage() {
                     leftSection={<IconBolt size={18} />}
                     color="orange"
                     size="md"
-                    disabled={!selectedDataset || isDatasetsLoading}
+                    onClick={() => navigate('/models/train')}
                     styles={{
                       root: {
                         backgroundColor: COLORS.PRIMARY,
@@ -200,7 +200,7 @@ export function HomePage() {
                     variant="light"
                     color="orange"
                     size="md"
-                    onClick={() => navigate('/datasets?import=true')}
+                    onClick={() => navigate('/datasets')}
                     styles={{
                       root: {
                         fontSize: '15px',
@@ -208,7 +208,7 @@ export function HomePage() {
                       },
                     }}
                   >
-                    Import Dataset
+                    View Datasets
                   </Button>
                 </Group>
               </Box>
@@ -346,7 +346,7 @@ export function HomePage() {
               What's New
             </Title>
 
-            <Text size="15px" c="dimmed" style={{ lineHeight: 1.6 }}>
+            <Text size="15px" c="dimmed">
               Check out the latest features and improvements in the{' '}
               <Text
                 span

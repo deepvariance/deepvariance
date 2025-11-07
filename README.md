@@ -1,6 +1,6 @@
-# Arayci Frontend - DeepVariance
+# DeepVariance Frontend
 
-**Arayci** is a minimalistic, local-first AutoML dashboard built with React + Vite + TypeScript. This is the official frontend for DeepVariance's AutoML platform.
+**DeepVariance** is a research-first machine learning platform for model development and dataset management, built with React + Vite + TypeScript.
 
 ## Features
 
@@ -53,7 +53,7 @@ Edit `.env` to configure your API endpoint:
 ```env
 VITE_API_BASE_URL=https://api.deepvariance.ai/v1
 VITE_ENV=development
-VITE_APP_NAME=Arayci
+VITE_APP_NAME=DeepVariance
 ```
 
 4. Start the development server:

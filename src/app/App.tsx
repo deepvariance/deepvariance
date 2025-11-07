@@ -16,7 +16,7 @@ export function App() {
         <AppShell
           header={{ height: 60 }}
           navbar={{
-            width: sidebarOpen ? 200 : 80,
+            width: sidebarOpen ? 260 : 80,
             breakpoint: 'sm',
           }}
           padding={0}
@@ -32,7 +32,7 @@ export function App() {
           <AppShell.Main
             style={{
               backgroundColor: '#FAFAFA',
-              minHeight: 'calc(100vh - 60px)',
+              height: 'calc(100vh - 60px)',
             }}
           >
             <AppRoutes />

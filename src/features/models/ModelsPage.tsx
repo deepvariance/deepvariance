@@ -10,85 +10,94 @@ import {
   Title,
   Text,
   Box,
+  Loader,
+  Center,
+  Alert,
+  ActionIcon,
+  Tooltip,
+  Modal,
 } from '@mantine/core'
-import { IconPlus, IconSearch, IconStack2 } from '@tabler/icons-react'
+import { IconPlus, IconSearch, IconStack2, IconAlertCircle, IconTrash } from '@tabler/icons-react'
+import { useNavigate } from 'react-router-dom'
+import { notifications } from '@mantine/notifications'
+import { useModels, useDeleteModel } from '@/shared/hooks/useModels'
+import { formatDate } from '@/shared/utils/formatters'
+import type { Model } from '@/shared/api/models'
 
-interface Model {
-  id: string
-  name: string
-  task: 'Classification' | 'Regression' | 'Vision'
-  version: string
-  status: 'Ready' | 'Draft'
-  lastUpdated: string
-  tags: string[]
+const taskColors: Record<string, string> = {
+  classification: 'blue',
+  regression: 'purple',
+  clustering: 'teal',
+  detection: 'grape',
 }
 
-const mockModels: Model[] = [
-  {
-    id: '1',
-    name: 'credit-risk-classifier',
-    task: 'Classification',
-    version: 'v0.1.3',
-    status: 'Ready',
-    lastUpdated: 'Oct 6, 2025',
-    tags: ['tabular', 'baseline'],
-  },
-  {
-    id: '2',
-    name: 'customer-churn-predictor',
-    task: 'Classification',
-    version: 'v1.2.0',
-    status: 'Ready',
-    lastUpdated: 'Oct 5, 2025',
-    tags: ['tabular', 'production'],
-  },
-  {
-    id: '3',
-    name: 'house-price-estimator',
-    task: 'Regression',
-    version: 'v0.0.5',
-    status: 'Draft',
-    lastUpdated: 'Oct 3, 2025',
-    tags: ['tabular', 'experimental'],
-  },
-  {
-    id: '4',
-    name: 'image-classifier-resnet',
-    task: 'Vision',
-    version: 'v2.1.0',
-    status: 'Ready',
-    lastUpdated: 'Oct 1, 2025',
-    tags: ['cv', 'transfer-learning'],
-  },
-]
-
-const taskColors: Record<Model['task'], string> = {
-  Classification: 'blue',
-  Regression: 'purple',
-  Vision: 'teal',
-}
-
-const statusColors: Record<Model['status'], string> = {
-  Ready: 'green',
-  Draft: 'orange',
+const statusColors: Record<string, string> = {
+  active: 'green',
+  ready: 'green',
+  training: 'blue',
+  queued: 'cyan',
+  draft: 'orange',
+  failed: 'red',
 }
 
 export function ModelsPage() {
+  const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const [taskFilter, setTaskFilter] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [modelToDelete, setModelToDelete] = useState<Model | null>(null)
 
-  const filteredModels = mockModels.filter((model) => {
-    const matchesSearch =
-      searchQuery === '' ||
-      model.name.toLowerCase().includes(searchQuery.toLowerCase())
-
-    const matchesTask = taskFilter === null || taskFilter === 'All Tasks' || model.task === taskFilter
-    const matchesStatus =
-      statusFilter === null || statusFilter === 'All Status' || model.status === statusFilter
-
-    return matchesSearch && matchesTask && matchesStatus
+  // Fetch models with filters
+  const { data: models = [], isLoading, error } = useModels({
+    search: searchQuery || undefined,
+    task: taskFilter && taskFilter !== 'All Tasks' ? taskFilter.toLowerCase() : undefined,
+    status: statusFilter && statusFilter !== 'All Status' ? statusFilter.toLowerCase() : undefined,
   })
+
+  // Delete model mutation
+  const deleteModelMutation = useDeleteModel()
+
+  // Helper function to check if model can be deleted
+  const canDeleteModel = (status: string) => {
+    return ['queued', 'ready', 'draft', 'failed'].includes(status)
+  }
+
+  // Handle delete button click
+  const handleDeleteClick = (model: Model, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (canDeleteModel(model.status)) {
+      setModelToDelete(model)
+      setDeleteModalOpen(true)
+    }
+  }
+
+  // Confirm delete
+  const handleConfirmDelete = async () => {
+    if (!modelToDelete) return
+
+    try {
+      await deleteModelMutation.mutateAsync({
+        id: modelToDelete.id,
+        deleteFiles: true,
+      })
+
+      notifications.show({
+        title: 'Model Deleted',
+        message: `Successfully deleted model "${modelToDelete.name}"`,
+        color: 'green',
+      })
+
+      setDeleteModalOpen(false)
+      setModelToDelete(null)
+    } catch (error) {
+      notifications.show({
+        title: 'Delete Failed',
+        message: error instanceof Error ? error.message : 'Failed to delete model',
+        color: 'red',
+      })
+    }
+  }
 
   return (
     <Stack gap={0} style={{ height: '100vh', backgroundColor: '#FAFAFA' }}>
@@ -107,6 +116,7 @@ export function ModelsPage() {
             leftSection={<IconPlus size={18} />}
             color="orange"
             size="md"
+            onClick={() => navigate('/models/train')}
             styles={{
               root: {
                 backgroundColor: '#FF5C4D',
@@ -118,7 +128,7 @@ export function ModelsPage() {
               },
             }}
           >
-            Create Model
+            Train Model
           </Button>
         </Group>
       </Box>
@@ -142,7 +152,7 @@ export function ModelsPage() {
           />
           <Select
             placeholder="All Tasks"
-            data={['All Tasks', 'Classification', 'Regression', 'Vision']}
+            data={['All Tasks', 'Classification', 'Regression', 'Clustering', 'Detection']}
             value={taskFilter}
             onChange={setTaskFilter}
             clearable
@@ -157,7 +167,7 @@ export function ModelsPage() {
           />
           <Select
             placeholder="All Status"
-            data={['All Status', 'Ready', 'Draft']}
+            data={['All Status', 'Active', 'Ready', 'Training', 'Queued', 'Draft', 'Failed']}
             value={statusFilter}
             onChange={setStatusFilter}
             clearable
@@ -217,14 +227,39 @@ export function ModelsPage() {
                 <Table.Th>STATUS</Table.Th>
                 <Table.Th>LAST UPDATED</Table.Th>
                 <Table.Th>TAGS</Table.Th>
+                <Table.Th>ACTIONS</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {filteredModels.length > 0 ? (
-                filteredModels.map((model) => (
+              {isLoading ? (
+                <Table.Tr>
+                  <Table.Td colSpan={7}>
+                    <Center py="xl">
+                      <Loader size="md" color="#FF5C4D" />
+                    </Center>
+                  </Table.Td>
+                </Table.Tr>
+              ) : error ? (
+                <Table.Tr>
+                  <Table.Td colSpan={7}>
+                    <Center py="xl">
+                      <Alert
+                        icon={<IconAlertCircle size={16} />}
+                        title="Error loading models"
+                        color="red"
+                        variant="light"
+                      >
+                        {error instanceof Error ? error.message : 'Failed to fetch models'}
+                      </Alert>
+                    </Center>
+                  </Table.Td>
+                </Table.Tr>
+              ) : models.length > 0 ? (
+                models.map((model) => (
                   <Table.Tr
                     key={model.id}
                     style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/models/${model.id}`)}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.backgroundColor = '#FAFAFA'
                     }}
@@ -255,12 +290,12 @@ export function ModelsPage() {
                     <Table.Td>
                       <Badge
                         variant="light"
-                        color={taskColors[model.task]}
+                        color={taskColors[model.task] || 'gray'}
                         styles={{
                           root: {
                             fontSize: '13px',
                             fontWeight: 500,
-                            textTransform: 'none',
+                            textTransform: 'capitalize',
                             paddingLeft: 10,
                             paddingRight: 10,
                           },
@@ -276,19 +311,33 @@ export function ModelsPage() {
                     </Table.Td>
                     <Table.Td>
                       <Badge
-                        variant={model.status === 'Ready' ? 'light' : 'outline'}
-                        color={statusColors[model.status]}
+                        variant={model.status === 'ready' || model.status === 'active' ? 'light' : 'outline'}
+                        color={statusColors[model.status] || 'gray'}
                         styles={{
                           root: {
                             fontSize: '13px',
                             fontWeight: 500,
-                            textTransform: 'none',
+                            textTransform: 'capitalize',
                             paddingLeft: 10,
                             paddingRight: 10,
                             backgroundColor:
-                              model.status === 'Ready' ? '#D4F4DD' : 'transparent',
-                            color: model.status === 'Ready' ? '#16A34A' : '#F97316',
-                            borderColor: model.status === 'Ready' ? 'transparent' : '#F97316',
+                              model.status === 'ready' || model.status === 'active'
+                                ? '#D4F4DD'
+                                : 'transparent',
+                            color:
+                              model.status === 'ready' || model.status === 'active'
+                                ? '#16A34A'
+                                : model.status === 'training'
+                                  ? '#3B82F6'
+                                  : model.status === 'queued'
+                                    ? '#0891B2'
+                                    : model.status === 'failed'
+                                      ? '#EF4444'
+                                      : '#F97316',
+                            borderColor:
+                              model.status === 'ready' || model.status === 'active'
+                                ? 'transparent'
+                                : statusColors[model.status] || '#F97316',
                           },
                         }}
                       >
@@ -297,7 +346,7 @@ export function ModelsPage() {
                     </Table.Td>
                     <Table.Td>
                       <Text size="15px" c="dimmed">
-                        {model.lastUpdated}
+                        {model.last_trained ? formatDate(model.last_trained) : formatDate(model.updated_at)}
                       </Text>
                     </Table.Td>
                     <Table.Td>
@@ -322,11 +371,39 @@ export function ModelsPage() {
                         ))}
                       </Group>
                     </Table.Td>
+                    <Table.Td>
+                      <Tooltip
+                        label={
+                          canDeleteModel(model.status)
+                            ? 'Delete model'
+                            : 'Cannot delete model while active or training'
+                        }
+                        position="left"
+                      >
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          size="lg"
+                          disabled={!canDeleteModel(model.status)}
+                          onClick={(e) => handleDeleteClick(model, e)}
+                          styles={{
+                            root: {
+                              '&:disabled': {
+                                backgroundColor: 'transparent',
+                                opacity: 0.4,
+                              },
+                            },
+                          }}
+                        >
+                          <IconTrash size={18} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Table.Td>
                   </Table.Tr>
                 ))
               ) : (
                 <Table.Tr>
-                  <Table.Td colSpan={6}>
+                  <Table.Td colSpan={7}>
                     <Text ta="center" c="dimmed" size="15px" py="xl">
                       No models found
                     </Text>
@@ -337,6 +414,52 @@ export function ModelsPage() {
           </Table>
         </Box>
       </Box>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        opened={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false)
+          setModelToDelete(null)
+        }}
+        title="Delete Model"
+        centered
+        styles={{
+          title: {
+            fontSize: '18px',
+            fontWeight: 600,
+          },
+        }}
+      >
+        <Stack gap={16}>
+          <Text size="15px">
+            Are you sure you want to delete the model{' '}
+            <Text component="span" fw={600}>
+              {modelToDelete?.name}
+            </Text>
+            ? This action cannot be undone.
+          </Text>
+          <Group justify="flex-end" gap={12}>
+            <Button
+              variant="light"
+              color="gray"
+              onClick={() => {
+                setDeleteModalOpen(false)
+                setModelToDelete(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              loading={deleteModelMutation.isPending}
+              onClick={handleConfirmDelete}
+            >
+              Delete
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   )
 }

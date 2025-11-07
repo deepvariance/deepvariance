@@ -60,6 +60,14 @@ export const theme = createTheme({
   primaryShade: 5,
 
   components: {
+    Text: {
+      styles: {
+        root: {
+          lineHeight: '1.6',
+        },
+      },
+    },
+
     Button: {
       defaultProps: {
         size: 'md',

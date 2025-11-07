@@ -56,3 +56,8 @@ export const formatters = {
    */
   storage: (storage: string): string => storage.toUpperCase(),
 } as const
+
+/**
+ * Standalone formatDate function for convenience
+ */
+export const formatDate = formatters.date

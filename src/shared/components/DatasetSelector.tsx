@@ -103,11 +103,6 @@ export function DatasetSelector({
               paddingLeft: 16,
               paddingRight: 16,
               transition: 'border-color 0.2s ease, border-width 0.2s ease',
-              '&:focus, &:focus-within': {
-                borderColor: COLORS.PRIMARY,
-                borderWidth: 2,
-                outline: 'none',
-              },
             },
           }}
         >
@@ -148,16 +143,8 @@ export function DatasetSelector({
                 key={dataset.value}
                 value={dataset.value}
                 p={12}
-                styles={{
-                  option: {
-                    borderRadius: 6,
-                    '&[data-combobox-selected]': {
-                      backgroundColor: COLORS.PRIMARY_LIGHT,
-                    },
-                    '&[data-combobox-active]': {
-                      backgroundColor: COLORS.PRIMARY_LIGHT,
-                    },
-                  },
+                style={{
+                  borderRadius: 6,
                 }}
               >
                 <SelectItem

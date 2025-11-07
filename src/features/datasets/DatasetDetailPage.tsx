@@ -26,20 +26,37 @@ interface BreadcrumbItem {
 function DatasetBreadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   return (
     <Breadcrumbs separator={<IconChevronRight size={14} color="#9CA3AF" />}>
-      {items.map((item, index) => (
-        <Anchor
-          key={index}
-          onClick={item.onClick}
-          style={{
-            cursor: item.onClick ? 'pointer' : 'default',
-            color: item.onClick ? '#FF5C4D' : '#6B7280',
-            textDecoration: 'none',
-            fontSize: '14px',
-          }}
-        >
-          {item.title}
-        </Anchor>
-      ))}
+      {items.map((item, index) => {
+        const isCurrentPage = !item.onClick
+
+        if (isCurrentPage) {
+          return (
+            <Text
+              key={index}
+              size="14px"
+              c="#6B7280"
+              fw={500}
+            >
+              {item.title}
+            </Text>
+          )
+        }
+
+        return (
+          <Anchor
+            key={index}
+            onClick={item.onClick}
+            style={{
+              cursor: 'pointer',
+              color: '#FF5C4D',
+              textDecoration: 'none',
+              fontSize: '14px',
+            }}
+          >
+            {item.title}
+          </Anchor>
+        )
+      })}
     </Breadcrumbs>
   )
 }
