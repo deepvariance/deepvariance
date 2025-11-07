@@ -37,11 +37,11 @@ export const useDataset = (id: string) => {
 /**
  * Hook to create/upload a dataset
  */
-export const useCreateDataset = () => {
+export const useCreateDataset = (onUploadProgress?: (progressEvent: any) => void) => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: createDataset,
+    mutationFn: (formData: FormData) => createDataset(formData, onUploadProgress),
     onSuccess: () => {
       // Invalidate and refetch datasets list
       queryClient.invalidateQueries({ queryKey: ['datasets'] })

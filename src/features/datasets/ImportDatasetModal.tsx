@@ -1,6 +1,6 @@
 import {
   Button,
-  Drawer,
+  Modal,
   FileInput,
   Group,
   Select,
@@ -8,33 +8,45 @@ import {
   Text,
   Textarea,
   TextInput,
+  Progress,
+  Alert,
 } from '@mantine/core'
-import { IconUpload } from '@tabler/icons-react'
+import { IconUpload, IconAlertCircle } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useCreateDataset } from '@/shared/hooks/useDatasets'
 import { notifications } from '@mantine/notifications'
+import axios from 'axios'
 
-interface ImportDatasetDrawerProps {
+interface ImportDatasetModalProps {
   opened: boolean
   onClose: () => void
 }
 
-export function ImportDatasetDrawer({ opened, onClose }: ImportDatasetDrawerProps) {
+export function ImportDatasetModal({ opened, onClose }: ImportDatasetModalProps) {
   const [importName, setImportName] = useState('')
   const [importDomain, setImportDomain] = useState<string | null>(null)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importTags, setImportTags] = useState('')
   const [importDescription, setImportDescription] = useState('')
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [errorMessage, setErrorMessage] = useState('')
 
-  const { mutate: createDataset, isPending: isCreating } = useCreateDataset()
+  const handleUploadProgress = (progressEvent: any) => {
+    if (progressEvent.total) {
+      const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+      setUploadProgress(progress)
+    }
+  }
+
+  const { mutate: createDataset, isPending: isCreating } = useCreateDataset(handleUploadProgress)
 
   const handleImport = () => {
+    // Clear previous errors
+    setErrorMessage('')
+    setUploadProgress(0)
+
     if (!importName || !importDomain || !importFile) {
-      notifications.show({
-        title: 'Validation error',
-        message: 'Please fill in all required fields',
-        color: 'red',
-      })
+      setErrorMessage('Please fill in all required fields')
       return
     }
 
@@ -62,25 +74,31 @@ export function ImportDatasetDrawer({ opened, onClose }: ImportDatasetDrawerProp
         setImportFile(null)
         setImportTags('')
         setImportDescription('')
+        setUploadProgress(0)
+        setErrorMessage('')
         onClose()
       },
       onError: error => {
-        notifications.show({
-          title: 'Import failed',
-          message: error instanceof Error ? error.message : 'Failed to import dataset',
-          color: 'red',
-        })
+        // Extract error message from axios error
+        let errorMsg = 'Failed to import dataset'
+        if (axios.isAxiosError(error) && error.response?.data?.detail) {
+          errorMsg = error.response.data.detail
+        } else if (error instanceof Error) {
+          errorMsg = error.message
+        }
+        setErrorMessage(errorMsg)
+        setUploadProgress(0)
       },
     })
   }
 
   return (
-    <Drawer
+    <Modal
       opened={opened}
       onClose={onClose}
-      position="right"
       title="Import Dataset"
-      size="md"
+      size="lg"
+      centered
       styles={{
         title: {
           fontSize: '20px',
@@ -92,6 +110,33 @@ export function ImportDatasetDrawer({ opened, onClose }: ImportDatasetDrawerProp
         <Text size="15px" c="dimmed">
           Upload your dataset files. Large files (up to 100GB) are supported.
         </Text>
+
+        {errorMessage && (
+          <Alert
+            icon={<IconAlertCircle size={16} />}
+            title="Import Failed"
+            color="red"
+            variant="light"
+            withCloseButton
+            onClose={() => setErrorMessage('')}
+          >
+            {errorMessage}
+          </Alert>
+        )}
+
+        {isCreating && uploadProgress > 0 && (
+          <Stack gap="xs">
+            <Group justify="space-between">
+              <Text size="sm" fw={500}>
+                Uploading dataset...
+              </Text>
+              <Text size="sm" c="dimmed">
+                {uploadProgress}%
+              </Text>
+            </Group>
+            <Progress value={uploadProgress} size="sm" color="orange" animated />
+          </Stack>
+        )}
 
         <TextInput
           label="Dataset Name"
@@ -114,9 +159,8 @@ export function ImportDatasetDrawer({ opened, onClose }: ImportDatasetDrawerProp
           data={[
             { value: 'vision', label: 'Vision' },
             { value: 'tabular', label: 'Tabular' },
-            { value: 'text', label: 'Text' },
-            { value: 'audio', label: 'Audio' },
           ]}
+          description="Only Vision and Tabular datasets are currently supported"
           styles={{
             label: { fontSize: '14px', fontWeight: 500, marginBottom: 8 },
             input: { fontSize: '15px' },
@@ -160,22 +204,29 @@ export function ImportDatasetDrawer({ opened, onClose }: ImportDatasetDrawerProp
           }}
         />
 
-        <Group justify="flex-end" gap="sm" mt="xl">
+        <Group justify="flex-end" gap="sm" mt="md">
           <Button
-            variant="subtle"
+            variant="light"
             color="gray"
             onClick={onClose}
             disabled={isCreating}
+            styles={{
+              root: {
+                fontSize: '15px',
+              },
+            }}
           >
             Cancel
           </Button>
           <Button
             onClick={handleImport}
             loading={isCreating}
-            leftSection={<IconUpload size={16} />}
+            leftSection={!isCreating && <IconUpload size={16} />}
+            color="orange"
             styles={{
               root: {
                 backgroundColor: '#FF5C4D',
+                fontSize: '15px',
               },
             }}
           >
@@ -183,6 +234,6 @@ export function ImportDatasetDrawer({ opened, onClose }: ImportDatasetDrawerProp
           </Button>
         </Group>
       </Stack>
-    </Drawer>
+    </Modal>
   )
 }

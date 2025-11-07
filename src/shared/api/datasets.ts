@@ -47,11 +47,16 @@ export const getDataset = async (id: string): Promise<Dataset> => {
 /**
  * Create/upload a new dataset
  */
-export const createDataset = async (formData: FormData): Promise<Dataset> => {
+export const createDataset = async (
+  formData: FormData,
+  onUploadProgress?: (progressEvent: any) => void
+): Promise<Dataset> => {
   const { data } = await apiClient.post<Dataset>('/datasets', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
+    onUploadProgress,
+    timeout: 600000, // 10 minutes for large files
   })
   return data
 }

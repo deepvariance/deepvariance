@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useDatasets, useDeleteDataset } from '@/shared/hooks/useDatasets'
 import { DatasetsTable } from './DatasetsTable'
-import { ImportDatasetDrawer } from './ImportDatasetDrawer'
+import { ImportDatasetModal } from './ImportDatasetModal'
 
 export function DatasetsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -29,7 +29,7 @@ export function DatasetsPage() {
     id: string
     name: string
   } | null>(null)
-  const [importDrawerOpen, setImportDrawerOpen] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
 
   const filters = {
     search: searchQuery || undefined,
@@ -46,10 +46,10 @@ export function DatasetsPage() {
   const { data: datasets, isLoading, isError, error } = useDatasets(filters)
   const { mutate: deleteDataset, isPending: isDeleting } = useDeleteDataset()
 
-  // Check URL params on mount to open import drawer
+  // Check URL params on mount to open import modal
   useEffect(() => {
     if (searchParams.get('import') === 'true') {
-      setImportDrawerOpen(true)
+      setImportModalOpen(true)
       // Remove the param from URL
       searchParams.delete('import')
       setSearchParams(searchParams, { replace: true })
@@ -104,7 +104,7 @@ export function DatasetsPage() {
             leftSection={<IconPlus size={18} />}
             color="orange"
             size="md"
-            onClick={() => setImportDrawerOpen(true)}
+            onClick={() => setImportModalOpen(true)}
             styles={{
               root: {
                 backgroundColor: '#FF5C4D',
@@ -139,7 +139,7 @@ export function DatasetsPage() {
           />
           <Select
             placeholder="All Domains"
-            data={['All Domains', 'Tabular', 'Vision', 'Text', 'Audio']}
+            data={['All Domains', 'Tabular', 'Vision']}
             value={domainFilter}
             onChange={setDomainFilter}
             clearable
@@ -265,9 +265,9 @@ export function DatasetsPage() {
         </Stack>
       </Modal>
 
-      <ImportDatasetDrawer
-        opened={importDrawerOpen}
-        onClose={() => setImportDrawerOpen(false)}
+      <ImportDatasetModal
+        opened={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
       />
     </Stack>
   )

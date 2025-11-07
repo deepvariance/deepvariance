@@ -1,7 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { HomePage } from '@/features/home/HomePage'
 import { ModelsPage } from '@/features/models/ModelsPage'
-import { TrainModelPage } from '@/features/models/TrainModelPage'
 import { ModelDetailPage } from '@/features/models/ModelDetailPage'
 import { DatasetsPage } from '@/features/datasets/DatasetsPage'
 import { DatasetDetailPage } from '@/features/datasets/DatasetDetailPage'
@@ -16,7 +15,6 @@ export function AppRoutes() {
     <Routes>
       <Route path={ROUTES.HOME} element={<HomePage />} />
       <Route path={ROUTES.MODELS} element={<ModelsPage />} />
-      <Route path="/models/train" element={<TrainModelPage />} />
       <Route path="/models/:id" element={<ModelDetailPage />} />
       <Route path={ROUTES.DATASETS} element={<DatasetsPage />} />
       <Route path="/datasets/:id" element={<DatasetDetailPage />} />

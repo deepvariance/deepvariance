@@ -23,6 +23,7 @@ import { notifications } from '@mantine/notifications'
 import { useModels, useDeleteModel } from '@/shared/hooks/useModels'
 import { formatDate } from '@/shared/utils/formatters'
 import type { Model } from '@/shared/api/models'
+import { TrainModelModal } from './TrainModelModal'
 
 const taskColors: Record<string, string> = {
   classification: 'blue',
@@ -47,6 +48,7 @@ export function ModelsPage() {
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [modelToDelete, setModelToDelete] = useState<Model | null>(null)
+  const [trainModalOpen, setTrainModalOpen] = useState(false)
 
   // Fetch models with filters
   const { data: models = [], isLoading, error } = useModels({
@@ -116,7 +118,7 @@ export function ModelsPage() {
             leftSection={<IconPlus size={18} />}
             color="orange"
             size="md"
-            onClick={() => navigate('/models/train')}
+            onClick={() => setTrainModalOpen(true)}
             styles={{
               root: {
                 backgroundColor: '#FF5C4D',
@@ -414,6 +416,9 @@ export function ModelsPage() {
           </Table>
         </Box>
       </Box>
+
+      {/* Train Model Modal */}
+      <TrainModelModal opened={trainModalOpen} onClose={() => setTrainModalOpen(false)} />
 
       {/* Delete Confirmation Modal */}
       <Modal
