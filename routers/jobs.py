@@ -68,10 +68,23 @@ async def create_training_job(
     # Set default hyperparameters if not provided
     hyperparams = job_request.hyperparameters or HyperparametersConfig()
 
+    # Create model record with queued status
+    model_name = job_request.model_name or f"{dataset.get('name')}_model"
+    model_data = {
+        "name": model_name,
+        "task": job_request.task.value,
+        "framework": "PyTorch",
+        "tags": [dataset.get("name"), job_request.task.value],
+        "description": f"CNN model training on {dataset.get('name')}",
+        "status": "queued",
+        "dataset_id": job_request.dataset_id,
+    }
+    new_model = ModelDB.create(model_data)
+
     # Create job record
     job_data = {
         "dataset_id": job_request.dataset_id,
-        "model_id": None,
+        "model_id": new_model["id"],
         "status": "pending",
         "progress": 0.0,
         "current_iteration": 0,
@@ -90,7 +103,8 @@ async def create_training_job(
         job_id=new_job["id"],
         dataset=dataset,
         hyperparams=hyperparams,
-        model_name=job_request.model_name,
+        model_id=new_model["id"],
+        model_name=model_name,
         task=job_request.task
     )
 

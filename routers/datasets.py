@@ -22,6 +22,7 @@ from models import (
     DatasetReadiness
 )
 from database import DatasetDB
+from validators import DatasetValidator, ValidationError
 
 router = APIRouter()
 
@@ -211,11 +212,60 @@ async def create_dataset(
     # Parse tags
     tag_list = _parse_tags(tags)
 
-    # Determine readiness: vision datasets are ready immediately
-    readiness = "ready" if domain.value == "vision" else "draft"
+    # Validate dataset structure
+    validation_result = None
+    readiness = "draft"
+
+    try:
+        validation_result = DatasetValidator.validate_dataset(
+            dataset_path=dataset_dir,
+            domain=domain.value,
+            task=None  # Task not specified at upload time
+        )
+        readiness = "ready"
+        print(f"Validation passed: {validation_result.get('message')}")
+    except ValidationError as e:
+        # Validation failed - clean up and return error
+        error_message = str(e)
+        print(f"Validation failed: {error_message}")
+
+        # Delete uploaded files
+        if dataset_dir.exists():
+            shutil.rmtree(dataset_dir)
+            print(f"Cleaned up invalid dataset: {dataset_dir}")
+
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dataset validation failed: {error_message}"
+        )
+    except Exception as e:
+        # Unexpected validation error - clean up and fail
+        print(f"Validation error (unexpected): {str(e)}")
+
+        # Delete uploaded files
+        if dataset_dir.exists():
+            shutil.rmtree(dataset_dir)
+            print(f"Cleaned up dataset after error: {dataset_dir}")
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dataset validation error: {str(e)}"
+        )
 
     # Build dataset record
     size_mb = total_bytes / (1024**2)
+
+    # Use validation info if available
+    if validation_result:
+        file_count = validation_result.get('total_samples', file_count)
+
+    dataset_description = description
+    if not dataset_description:
+        if validation_result:
+            dataset_description = validation_result.get('message', f"Dataset: {name}")
+        else:
+            dataset_description = f"Dataset: {name} ({file_count} files, {size_mb:.2f} MB)"
+
     dataset_data = {
         "name": name,
         "domain": domain.value,
@@ -223,13 +273,13 @@ async def create_dataset(
         "path": str(dataset_dir),
         "size": file_count,
         "tags": tag_list,
-        "description": description or f"Dataset: {name} ({file_count} files, {size_mb:.2f} MB)",
+        "description": dataset_description,
         "readiness": readiness
     }
 
     new_dataset = DatasetDB.create(dataset_data)
 
-    print(f"Dataset created: {name} | Files: {file_count} | Size: {size_mb:.2f} MB")
+    print(f"Dataset created: {name} | Files: {file_count} | Size: {size_mb:.2f} MB | Status: {readiness}")
 
     return new_dataset
 
@@ -288,6 +338,72 @@ async def update_dataset_name(dataset_id: str, name: str):
 
     updated_dataset = DatasetDB.update(dataset_id, {"name": name})
     return updated_dataset
+
+
+@router.post("/{dataset_id}/validate")
+async def validate_dataset_for_task(dataset_id: str, task: Optional[str] = None):
+    """
+    Validate a dataset for a specific task.
+
+    Args:
+        dataset_id: Unique dataset identifier
+        task: Task type (classification, regression, clustering, detection)
+
+    Returns:
+        Validation result with details
+
+    Raises:
+        HTTPException: If dataset not found or validation fails
+    """
+    # Check if dataset exists
+    dataset = DatasetDB.get_by_id(dataset_id)
+    if not dataset:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dataset {dataset_id} not found"
+        )
+
+    dataset_path = Path(dataset.get("path", ""))
+    if not dataset_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset files not found on disk"
+        )
+
+    try:
+        validation_result = DatasetValidator.validate_dataset(
+            dataset_path=dataset_path,
+            domain=dataset.get("domain"),
+            task=task
+        )
+
+        # Update dataset readiness if validation passed
+        if validation_result.get("valid"):
+            DatasetDB.update(dataset_id, {"readiness": "ready"})
+
+        return {
+            "valid": True,
+            "dataset_id": dataset_id,
+            "validation": validation_result
+        }
+    except ValidationError as e:
+        # Update dataset to error status
+        error_desc = f"Validation error: {str(e)}"
+        DatasetDB.update(dataset_id, {
+            "readiness": "error",
+            "description": f"{dataset.get('description', '')} | {error_desc}"
+        })
+        return {
+            "valid": False,
+            "dataset_id": dataset_id,
+            "error": str(e),
+            "message": "Dataset validation failed"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Validation error: {str(e)}"
+        )
 
 
 @router.delete("/{dataset_id}", response_model=MessageResponse)

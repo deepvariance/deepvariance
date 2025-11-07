@@ -14,6 +14,7 @@ def run_training_job(
     job_id: str,
     dataset: dict,
     hyperparams: HyperparametersConfig,
+    model_id: str = None,
     model_name: str = None,
     task: ModelTask = ModelTask.CLASSIFICATION
 ):
@@ -21,6 +22,10 @@ def run_training_job(
     Run a training job in the background using the CNN pipeline
     """
     try:
+        # Update model status to training
+        if model_id:
+            ModelDB.update(model_id, {"status": "training"})
+
         # Update job status to running
         JobDB.update(job_id, {
             "status": "running",
@@ -77,37 +82,33 @@ def run_training_job(
         # Training completed
         final_accuracy = 0.92  # Mock final accuracy
 
-        # Create model record
-        model_data = {
-            "name": model_name or f"{dataset_name}_model",
-            "task": task.value,
-            "framework": "PyTorch",
-            "tags": [dataset_name, task.value],
-            "description": f"CNN model trained on {dataset_name}",
-            "accuracy": final_accuracy * 100,
-            "status": "ready",
-            "dataset_id": dataset.get("id"),
-            "last_trained": datetime.now().isoformat(),
-            "model_path": f"./models/best_model_{dataset_name}.py"
-        }
-
-        new_model = ModelDB.create(model_data)
+        # Update existing model record
+        if model_id:
+            ModelDB.update(model_id, {
+                "accuracy": final_accuracy * 100,
+                "status": "ready",
+                "last_trained": datetime.now().isoformat(),
+                "model_path": f"./models/best_model_{dataset_name}.py"
+            })
 
         # Update job as completed
         JobDB.update(job_id, {
             "status": "completed",
             "progress": 100.0,
             "best_accuracy": final_accuracy,
-            "model_id": new_model["id"],
             "completed_at": datetime.now().isoformat()
         })
 
-        print(f"[Job {job_id}] Training completed successfully! Model ID: {new_model['id']}")
+        print(f"[Job {job_id}] Training completed successfully! Model ID: {model_id}")
 
     except Exception as e:
         # Handle training failure
         error_msg = str(e)
         print(f"[Job {job_id}] Training failed: {error_msg}")
+
+        # Update model status to failed
+        if model_id:
+            ModelDB.update(model_id, {"status": "failed"})
 
         JobDB.update(job_id, {
             "status": "failed",

@@ -13,8 +13,6 @@ class DatasetDomain(str, Enum):
     """Dataset domain types"""
     TABULAR = "tabular"
     VISION = "vision"
-    TEXT = "text"
-    AUDIO = "audio"
 
 class DatasetReadiness(str, Enum):
     """Dataset readiness status"""
@@ -42,6 +40,7 @@ class ModelStatus(str, Enum):
     ACTIVE = "active"
     READY = "ready"
     TRAINING = "training"
+    QUEUED = "queued"
     DRAFT = "draft"
     FAILED = "failed"
 
