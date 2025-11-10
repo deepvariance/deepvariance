@@ -151,7 +151,7 @@ async def create_dataset(
         HTTPException: If file save/extraction fails or dataset already exists
 
     Notes:
-        - The backend automatically creates storage directory at ./data/{name}/
+        - The backend automatically creates storage directory at ./data/{uuid}/
         - ZIP files are extracted and the archive is removed
         - Dataset size is calculated by walking the directory tree
         - Vision datasets are marked as 'ready', others as 'draft'
@@ -159,14 +159,12 @@ async def create_dataset(
     # Ensure data directory exists
     DATA_DIR.mkdir(exist_ok=True)
 
-    # Create dataset-specific directory
-    dataset_dir = DATA_DIR / name
-    if dataset_dir.exists():
-        raise HTTPException(
-            status_code=400,
-            detail=f"Dataset '{name}' already exists"
-        )
+    # Generate UUID for this dataset upfront (before file operations)
+    import uuid
+    dataset_id = str(uuid.uuid4())
 
+    # Create dataset-specific directory using UUID instead of name
+    dataset_dir = DATA_DIR / dataset_id
     dataset_dir.mkdir(parents=True, exist_ok=True)
     file_path = dataset_dir / file.filename
 
@@ -267,6 +265,7 @@ async def create_dataset(
             dataset_description = f"Dataset: {name} ({file_count} files, {size_mb:.2f} MB)"
 
     dataset_data = {
+        "id": dataset_id,  # Use our pre-generated UUID
         "name": name,
         "domain": domain.value,
         "storage": "local",
@@ -430,9 +429,12 @@ async def delete_dataset(dataset_id: str):
 
     # Delete files from storage
     files_deleted = False
-    if dataset.get("storage") == "local":
+    # Default to local storage if not specified (since storage field is not in DB schema)
+    storage_type = dataset.get("storage", "local")
+    if storage_type == "local":
+        # Use file_path from database (which is mapped to 'path' in model_to_dict)
         dataset_path = Path(dataset.get("path", ""))
-        if dataset_path.exists():
+        if dataset_path and dataset_path.exists():
             try:
                 shutil.rmtree(dataset_path)
                 files_deleted = True

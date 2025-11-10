@@ -1,14 +1,19 @@
 """
 Training Job Runner
-Background task runner for CNN training jobs
+Background task runner using the plugin-based training pipeline
 """
-import subprocess
-import json
-import os
+
 from datetime import datetime
 from pathlib import Path
-from database import JobDB, ModelDB
+from typing import Optional
+import traceback
+
+from database import JobDB, ModelDB, DatasetDB
 from models import HyperparametersConfig, ModelTask
+from training_pipeline import TrainingOrchestrator, TrainingConfig, ProgressUpdate
+from job_logger import JobLogger
+from hardware_utils import get_optimal_device, log_device_info
+
 
 def run_training_job(
     job_id: str,
@@ -16,15 +21,34 @@ def run_training_job(
     hyperparams: HyperparametersConfig,
     model_id: str = None,
     model_name: str = None,
-    task: ModelTask = ModelTask.CLASSIFICATION
+    task: ModelTask = ModelTask.CLASSIFICATION,
+    strategy: str = 'auto'
 ):
     """
-    Run a training job in the background using the CNN pipeline
+    Run a training job using the plugin-based training pipeline
+
+    Args:
+        job_id: Job ID for tracking
+        dataset: Dataset dictionary from database
+        hyperparams: Hyperparameters configuration
+        model_id: Model ID (created before training)
+        model_name: Model name
+        task: Training task (classification, regression, etc.)
+        strategy: Training strategy (llm, native, auto)
     """
+    import time
+    start_time = time.time()
+
+    # Create logger for this job
+    logger = JobLogger(job_id)
+
     try:
+        logger.info(f"Starting training job {job_id}")
+
         # Update model status to training
         if model_id:
             ModelDB.update(model_id, {"status": "training"})
+            logger.info(f"Model {model_id} status updated to 'training'")
 
         # Update job status to running
         JobDB.update(job_id, {
@@ -32,174 +56,261 @@ def run_training_job(
             "started_at": datetime.now().isoformat(),
             "progress": 0.0
         })
+        logger.info("Job status updated to 'running'")
 
-        # Prepare dataset path
-        dataset_path = dataset.get("path")
+        # Extract dataset info
+        dataset_id = dataset.get("id")
+        dataset_path = Path(dataset.get("path"))
         dataset_name = dataset.get("name")
         dataset_domain = dataset.get("domain")
+        num_samples = dataset.get("size", 0)
 
-        # Build command for CNN training
-        cmd = [
-            "python", "cnn_new.py",
-            "--dataset", dataset_path,
-            "--num-workers", "0"
-        ]
+        # Infer number of classes from dataset structure (for vision datasets)
+        num_classes = _infer_num_classes(dataset_path, dataset_domain)
 
-        # Add resize parameter for non-MNIST datasets
-        if dataset_domain in ["vision", "tabular"]:
-            cmd.extend(["--resize", "224", "224"])
+        logger.info(f"Dataset: {dataset_name}")
+        logger.info(f"  - Samples: {num_samples}")
+        logger.info(f"  - Classes: {num_classes}")
+        logger.info(f"  - Domain: {dataset_domain}")
 
-        # Set environment variables for hyperparameters
-        # Note: The original cnn_new.py doesn't support hyperparameter arguments,
-        # so we would need to modify it or pass config via environment
+        # Detect optimal hardware device
+        device, device_description = get_optimal_device()
+        logger.info("")
+        log_device_info(logger)
+        logger.info("")
+        logger.info(f"Using device: {device} - {device_description}")
 
-        print(f"[Job {job_id}] Starting training with command: {' '.join(cmd)}")
-        print(f"[Job {job_id}] Hyperparameters: {hyperparams.model_dump()}")
+        # Build training configuration
+        config = TrainingConfig(
+            dataset_id=dataset_id,
+            dataset_path=dataset_path,
+            dataset_domain=dataset_domain,
+            num_classes=num_classes,
+            num_samples=num_samples,
+            model_id=model_id,
+            model_name=model_name or f"{dataset_name}_model",
+            task=task.value if isinstance(task, ModelTask) else task,
+            # Hyperparameters (optional - strategy may determine)
+            learning_rate=hyperparams.learning_rate if hyperparams else None,
+            batch_size=hyperparams.batch_size if hyperparams else None,
+            epochs=hyperparams.epochs if hyperparams else None,
+            optimizer=hyperparams.optimizer if hyperparams else None,
+            dropout_rate=hyperparams.dropout_rate if hyperparams else None,
+            # Training config
+            max_iterations=hyperparams.max_iterations if hyperparams else 10,
+            target_accuracy=hyperparams.target_accuracy if hyperparams else 1.0,
+            device=device,  # Adaptive: CUDA → MPS → CPU
+            # Platform integration
+            job_id=job_id,
+            strategy=strategy
+        )
 
-        # For now, simulate training progress
-        # In production, would actually run the CNN pipeline
-        # process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # Create orchestrator
+        orchestrator = TrainingOrchestrator()
 
-        # Simulate training iterations
-        import time
-        for iteration in range(1, hyperparams.max_iterations + 1):
-            # Simulate iteration time
-            time.sleep(2)  # In production, would monitor actual training
+        # Define progress callback
+        def on_progress(progress: ProgressUpdate):
+            """Update job progress in database"""
+            try:
+                # Calculate overall progress percentage
+                progress_percent = (progress.iteration / progress.total_iterations) * 100
 
-            # Mock accuracy progression
-            mock_accuracy = min(0.5 + (iteration * 0.05), 0.95)
-            progress = (iteration / hyperparams.max_iterations) * 100
+                # Calculate time tracking
+                elapsed_seconds = int(time.time() - start_time)
 
-            # Update job progress
+                # Estimate remaining time based on progress
+                if progress_percent > 0:
+                    total_estimated_seconds = int((elapsed_seconds / progress_percent) * 100)
+                    remaining_seconds = max(0, total_estimated_seconds - elapsed_seconds)
+                else:
+                    remaining_seconds = 0
+
+                # Format time strings
+                elapsed_time = _format_time(elapsed_seconds)
+                estimated_remaining = _format_time(remaining_seconds)
+
+                # Update job in database
+                update_data = {
+                    "progress": progress_percent,
+                    "current_iteration": progress.iteration,
+                    "total_iterations": progress.total_iterations,
+                    "current_accuracy": progress.current_accuracy,
+                }
+
+                if progress.best_accuracy is not None:
+                    update_data["best_accuracy"] = progress.best_accuracy
+
+                if progress.status == 'failed':
+                    update_data["status"] = "failed"
+                    update_data["error_message"] = progress.message
+
+                # Store time tracking in config JSONB field
+                job = JobDB.get_by_id(job_id)
+                if job:
+                    config = job.get("config") or {}
+                    config["elapsed_seconds"] = elapsed_seconds
+                    config["remaining_seconds"] = remaining_seconds
+                    config["elapsed_time"] = elapsed_time
+                    config["estimated_remaining"] = estimated_remaining
+                    update_data["config"] = config
+
+                JobDB.update(job_id, update_data)
+
+                # Log progress (handle None values safely)
+                if progress.current_accuracy is not None:
+                    acc_str = f"{progress.current_accuracy:.4f}"
+                else:
+                    acc_str = 'N/A'
+
+                logger.info(f"Iteration {progress.iteration}/{progress.total_iterations} - Accuracy: {acc_str} - Elapsed: {elapsed_time} - Remaining: {estimated_remaining}")
+
+                if progress.best_accuracy is not None:
+                    logger.info(f"  Best accuracy so far: {progress.best_accuracy:.4f}")
+
+            except Exception as e:
+                logger.error(f"Error updating progress: {e}")
+
+        # Execute training
+        logger.info(f"Starting training with strategy: {strategy}")
+        logger.info(f"Hyperparameters: max_iterations={config.max_iterations}, target_accuracy={config.target_accuracy}")
+        result = orchestrator.train(config, progress_callback=on_progress)
+
+        # Check if training succeeded
+        if result.success:
+            logger.info("=" * 50)
+            logger.info("Training completed successfully!")
+            if result.final_accuracy:
+                logger.info(f"Final accuracy: {result.final_accuracy:.4f}")
+            if result.best_accuracy:
+                logger.info(f"Best accuracy: {result.best_accuracy:.4f}")
+            if result.hyperparameters:
+                logger.info(f"Final hyperparameters: {result.hyperparameters}")
+            if result.model_path:
+                logger.info(f"Model saved to: {result.model_path}")
+            logger.info("=" * 50)
+
+            # Update model with final results
+            if model_id:
+                model_update = {
+                    "status": "ready",
+                    "last_trained": datetime.now().isoformat(),
+                    "accuracy": result.final_accuracy * 100 if result.final_accuracy else None,
+                    "loss": result.final_loss,
+                    "model_path": str(result.model_path) if result.model_path else None,
+                    "hyperparameters": result.hyperparameters,
+                    "metrics": result.metrics,
+                }
+                ModelDB.update(model_id, model_update)
+                logger.info(f"Model {model_id} updated with final results")
+
+            # Update job as completed (preserve iteration counts!)
+            job_data = JobDB.get_by_id(job_id)
             JobDB.update(job_id, {
-                "current_iteration": iteration,
-                "progress": progress,
-                "current_accuracy": mock_accuracy
+                "status": "completed",
+                "progress": 100.0,
+                "current_iteration": job_data.get("total_iterations") or config.max_iterations,
+                "total_iterations": job_data.get("total_iterations") or config.max_iterations,
+                "best_accuracy": result.best_accuracy,
+                "completed_at": datetime.now().isoformat()
             })
 
-            print(f"[Job {job_id}] Iteration {iteration}/{hyperparams.max_iterations}, Accuracy: {mock_accuracy:.4f}")
+            logger.info(f"Job {job_id} completed successfully!")
 
-        # Training completed
-        final_accuracy = 0.92  # Mock final accuracy
+        else:
+            # Training failed
+            logger.error(f"Training failed: {result.error}")
 
-        # Update existing model record
-        if model_id:
-            ModelDB.update(model_id, {
-                "accuracy": final_accuracy * 100,
-                "status": "ready",
-                "last_trained": datetime.now().isoformat(),
-                "model_path": f"./models/best_model_{dataset_name}.py"
+            # Update model status to failed
+            if model_id:
+                ModelDB.update(model_id, {"status": "failed"})
+                logger.info(f"Model {model_id} marked as failed")
+
+            # Update job as failed
+            JobDB.update(job_id, {
+                "status": "failed",
+                "error_message": result.error,
+                "completed_at": datetime.now().isoformat()
             })
-
-        # Update job as completed
-        JobDB.update(job_id, {
-            "status": "completed",
-            "progress": 100.0,
-            "best_accuracy": final_accuracy,
-            "completed_at": datetime.now().isoformat()
-        })
-
-        print(f"[Job {job_id}] Training completed successfully! Model ID: {model_id}")
+            logger.info(f"Job {job_id} marked as failed")
 
     except Exception as e:
-        # Handle training failure
+        # Handle unexpected errors
         error_msg = str(e)
-        print(f"[Job {job_id}] Training failed: {error_msg}")
+        error_trace = traceback.format_exc()
+
+        logger.error(f"Unexpected error: {error_msg}")
+        logger.error("Full traceback:")
+        for line in error_trace.split('\n'):
+            if line.strip():
+                logger.error(f"  {line}")
 
         # Update model status to failed
         if model_id:
             ModelDB.update(model_id, {"status": "failed"})
 
+        # Update job as failed
         JobDB.update(job_id, {
             "status": "failed",
             "error_message": error_msg,
             "completed_at": datetime.now().isoformat()
         })
 
+    finally:
+        # Close logger
+        logger.close()
 
-def run_training_job_real(
-    job_id: str,
-    dataset: dict,
-    hyperparams: HyperparametersConfig,
-    model_name: str = None,
-    task: ModelTask = ModelTask.CLASSIFICATION
-):
+
+def _infer_num_classes(dataset_path: Path, dataset_domain: str) -> int:
     """
-    Run actual training job using cnn_new.py
-    (Use this once you want to integrate with real CNN pipeline)
+    Infer number of classes from dataset structure
+
+    For vision datasets, assumes structure:
+        dataset/
+            train/
+                class1/
+                class2/
+                ...
     """
-    try:
-        # Update job status
-        JobDB.update(job_id, {
-            "status": "running",
-            "started_at": datetime.now().isoformat()
-        })
+    if dataset_domain == 'vision':
+        # Look for class directories in train folder
+        train_dir = dataset_path / 'train'
+        if train_dir.exists() and train_dir.is_dir():
+            # Count subdirectories (each is a class)
+            class_dirs = [d for d in train_dir.iterdir() if d.is_dir() and not d.name.startswith('.')]
+            return len(class_dirs)
 
-        dataset_path = dataset.get("path")
+        # Fallback: count top-level directories
+        class_dirs = [d for d in dataset_path.iterdir() if d.is_dir() and not d.name.startswith('.')]
+        return max(len(class_dirs), 2)  # At least binary classification
 
-        # Run CNN training
-        cmd = [
-            "python", "cnn_new.py",
-            "--dataset", dataset_path,
-            "--num-workers", "0"
-        ]
+    # Default for other domains
+    return 2
 
-        # Run process and capture output
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
-        )
 
-        # Monitor output
-        for line in process.stdout:
-            print(f"[Job {job_id}] {line.strip()}")
+def _format_time(seconds: int) -> str:
+    """
+    Format seconds into human-readable time string
 
-            # Parse iteration progress
-            if "Iteration" in line:
-                # Extract iteration number and update progress
-                pass
+    Args:
+        seconds: Total seconds
 
-            # Parse final metrics JSON
-            if line.strip().startswith("{") and "Accuracy%" in line:
-                try:
-                    metrics = json.loads(line.strip())
-                    final_accuracy = metrics.get("Accuracy%", 0) / 100
+    Returns:
+        Formatted time string (e.g., "2h 15m", "45m 32s", "12s")
+    """
+    if seconds < 60:
+        return f"{seconds}s"
+    elif seconds < 3600:
+        minutes = seconds // 60
+        secs = seconds % 60
+        return f"{minutes}m {secs}s"
+    else:
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        return f"{hours}h {minutes}m"
 
-                    # Create model record
-                    model_data = {
-                        "name": model_name or f"{dataset.get('name')}_model",
-                        "task": task.value,
-                        "framework": "PyTorch",
-                        "accuracy": metrics.get("Accuracy%", 0),
-                        "dataset_id": dataset.get("id"),
-                        "status": "ready",
-                        "last_trained": datetime.now().isoformat()
-                    }
-                    new_model = ModelDB.create(model_data)
 
-                    # Update job
-                    JobDB.update(job_id, {
-                        "status": "completed",
-                        "best_accuracy": final_accuracy,
-                        "model_id": new_model["id"],
-                        "completed_at": datetime.now().isoformat()
-                    })
-
-                except json.JSONDecodeError:
-                    pass
-
-        process.wait()
-
-        if process.returncode != 0:
-            error_output = process.stderr.read()
-            raise Exception(f"Training process failed: {error_output}")
-
-    except Exception as e:
-        JobDB.update(job_id, {
-            "status": "failed",
-            "error_message": str(e),
-            "completed_at": datetime.now().isoformat()
-        })
+# Legacy functions for backward compatibility (deprecated)
+def run_training_job_real(*args, **kwargs):
+    """Deprecated: Use run_training_job instead"""
+    print("[WARNING] run_training_job_real is deprecated. Use run_training_job instead.")
+    return run_training_job(*args, **kwargs)

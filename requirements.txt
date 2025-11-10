@@ -7,9 +7,12 @@ python-multipart==0.0.12
 pydantic==2.9.2
 pydantic-settings==2.5.2
 
-# Deep Learning (from existing cnn_new.py)
+# Deep Learning
 torch==2.5.1
 torchvision==0.20.1
+Pillow==10.4.0
+
+# AI/ML APIs
 groq==0.11.0
 
 # System Monitoring
@@ -20,3 +23,8 @@ psutil==6.1.0
 
 # Utilities
 python-dotenv==1.0.1
+
+# Database - PostgreSQL
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.1

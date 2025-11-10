@@ -526,15 +526,54 @@ def parse_args():
                         default=None, help='Resize images to H W (for color datasets)')
     parser.add_argument('--num-workers', type=int,
                         default=DEFAULT_NUM_WORKERS, help='DataLoader num_workers')
+
+    # Platform integration arguments
+    parser.add_argument('--model-id', type=str, default=None,
+                        help='Model ID for output file naming (from platform)')
+    parser.add_argument('--job-id', type=str, default=None,
+                        help='Job ID for progress tracking (from platform)')
+
+    # Hyperparameter overrides (optional - LLM suggestions used if not provided)
+    parser.add_argument('--lr', '--learning-rate', type=float, default=None, dest='learning_rate',
+                        help='Learning rate override')
+    parser.add_argument('--batch-size', type=int, default=None,
+                        help='Batch size override')
+    parser.add_argument('--epochs', type=int, default=None,
+                        help='Number of training epochs override')
+    parser.add_argument('--optimizer', type=str, default=None, choices=['Adam', 'SGD', 'RMSprop'],
+                        help='Optimizer type override')
+    parser.add_argument('--dropout', '--dropout-rate', type=float, default=None, dest='dropout_rate',
+                        help='Dropout rate override')
+
+    # Training configuration
+    parser.add_argument('--max-iterations', type=int, default=None,
+                        help='Maximum LLM refinement iterations')
+    parser.add_argument('--target-accuracy', type=float, default=None,
+                        help='Target accuracy to achieve (0.0-1.0)')
+    parser.add_argument('--device', type=str, default=None, choices=['cpu', 'cuda', 'mps'],
+                        help='Training device (cpu, cuda, or mps)')
+
     return parser.parse_args()
 
 
 def main():
-    global num_classes, num_images, image_shape, dataset_name, train_dataset, testloader, DATA_NUM_WORKERS
+    global num_classes, num_images, image_shape, dataset_name, train_dataset, testloader, DATA_NUM_WORKERS, max_iterations, target_accuracy, device
     args = parse_args()
     dataset_name = args.dataset
     resize_to = tuple(args.resize) if args.resize else RESIZE_TO
     DATA_NUM_WORKERS = args.num_workers
+
+    # Apply CLI overrides for training configuration
+    if args.max_iterations is not None:
+        max_iterations = args.max_iterations
+    if args.target_accuracy is not None:
+        target_accuracy = args.target_accuracy
+    if args.device is not None:
+        device = args.device
+
+    # Platform integration IDs
+    model_id = args.model_id
+    job_id = args.job_id
 
     # Load dataset(s)
     train_dataset, val_dataset, testloader, image_shape, num_classes, num_images, dataset_key = get_dataset_loaders(

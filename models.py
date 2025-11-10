@@ -60,7 +60,7 @@ class DatasetBase(BaseModel):
     domain: DatasetDomain
     size: Optional[int] = Field(None, ge=0, description="Number of samples/rows")
     storage: StorageType = StorageType.LOCAL
-    path: str = Field(..., description="Path to dataset on storage")
+    path: Optional[str] = Field(None, description="Path to dataset on storage")
     tags: List[str] = Field(default_factory=list)
     description: Optional[str] = None
 
@@ -152,11 +152,13 @@ class TrainingJobResponse(BaseModel):
     total_iterations: int = 10
     current_accuracy: Optional[float] = None
     best_accuracy: Optional[float] = None
-    hyperparameters: HyperparametersConfig
+    hyperparameters: Optional[HyperparametersConfig] = None
     created_at: datetime
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    elapsed_time: Optional[str] = None  # Human-readable elapsed time (e.g., "2h 15m")
+    estimated_remaining: Optional[str] = None  # Human-readable estimated time (e.g., "45m 32s")
 
     class Config:
         from_attributes = True

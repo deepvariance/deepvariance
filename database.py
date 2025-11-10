@@ -1,54 +1,77 @@
 """
 Database and Storage Layer
-Simple JSON-based file storage for datasets, models, and jobs
+PostgreSQL-based database operations using SQLAlchemy ORM
 """
-import json
 import os
-import uuid
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
-# Storage paths
-DB_DIR = Path("./db")
-DATASETS_DB = DB_DIR / "datasets.json"
-MODELS_DB = DB_DIR / "models.json"
-JOBS_DB = DB_DIR / "jobs.json"
+from db_config import SessionLocal, get_db, init_db as init_db_tables
+from db_models import Dataset, Model, Job
+
+# Storage paths for file uploads
 DATA_DIR = Path("./data")
 MODELS_DIR = Path("./models")
 RESULTS_DIR = Path("./results")
 
 def initialize_db():
-    """Initialize database files and directories"""
-    # Create directories
-    DB_DIR.mkdir(exist_ok=True)
+    """Initialize database tables and directories"""
+    # Create directories for file storage
     DATA_DIR.mkdir(exist_ok=True)
     MODELS_DIR.mkdir(exist_ok=True)
     RESULTS_DIR.mkdir(exist_ok=True)
 
-    # Initialize JSON files
-    for db_file in [DATASETS_DB, MODELS_DB, JOBS_DB]:
-        if not db_file.exists():
-            db_file.write_text(json.dumps([]))
+    # Initialize PostgreSQL tables
+    init_db_tables()
+    print(f"Database initialized successfully")
 
-    print(f"Database initialized at {DB_DIR}")
+def model_to_dict(model_instance) -> Dict[str, Any]:
+    """Convert SQLAlchemy model instance to dictionary"""
+    if model_instance is None:
+        return None
 
-def load_db(db_file: Path) -> List[Dict[str, Any]]:
-    """Load database from JSON file"""
-    try:
-        with open(db_file, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
+    result = {}
+    for column in model_instance.__table__.columns:
+        # Get the actual column name in the database
+        col_name = column.name
 
-def save_db(db_file: Path, data: List[Dict[str, Any]]):
-    """Save database to JSON file"""
-    with open(db_file, 'w') as f:
-        json.dump(data, f, indent=2, default=str)
+        # Map the attribute name (which might be different for 'metadata')
+        attr_name = col_name
+        if col_name == 'metadata':
+            attr_name = 'meta_data'  # Use the Python attribute name
 
-def generate_id() -> str:
-    """Generate unique ID"""
-    return str(uuid.uuid4())
+        value = getattr(model_instance, attr_name, None)
+
+        # Convert UUID objects to strings
+        if hasattr(value, 'hex'):  # UUID objects have a 'hex' attribute
+            value = str(value)
+        # Convert datetime/date objects to ISO format strings
+        elif isinstance(value, datetime):
+            value = value.isoformat()
+        elif hasattr(value, 'isoformat'):  # Handle date objects
+            value = value.isoformat()
+
+        result[col_name] = value
+
+    # Add 'path' field for backward compatibility (alias for file_path)
+    if 'file_path' in result:
+        result['path'] = result['file_path']
+
+    # Add 'size' field (alias for total_samples) for API compatibility
+    if 'total_samples' in result:
+        result['size'] = result['total_samples']
+
+    # Extract time tracking from config JSONB for Job models
+    if hasattr(model_instance, 'config') and result.get('config'):
+        config = result['config']
+        if isinstance(config, dict):
+            result['elapsed_time'] = config.get('elapsed_time')
+            result['estimated_remaining'] = config.get('estimated_remaining')
+
+    return result
 
 # ============= Dataset Operations =============
 
@@ -58,76 +81,133 @@ class DatasetDB:
     @staticmethod
     def get_all(domain: Optional[str] = None, readiness: Optional[str] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all datasets with optional filters"""
-        datasets = load_db(DATASETS_DB)
+        db = SessionLocal()
+        try:
+            query = db.query(Dataset)
 
-        # Apply filters
-        if domain:
-            datasets = [d for d in datasets if d.get("domain") == domain]
-        if readiness:
-            datasets = [d for d in datasets if d.get("readiness") == readiness]
-        if search:
-            search_lower = search.lower()
-            datasets = [d for d in datasets if search_lower in d.get("name", "").lower()]
+            # Apply filters
+            if domain:
+                query = query.filter(Dataset.domain == domain)
+            if readiness:
+                query = query.filter(Dataset.readiness == readiness)
+            if search:
+                search_pattern = f"%{search}%"
+                query = query.filter(Dataset.name.ilike(search_pattern))
 
-        return datasets
+            # Order by created_at descending (newest first)
+            query = query.order_by(Dataset.created_at.desc())
+
+            datasets = query.all()
+            return [model_to_dict(d) for d in datasets]
+        finally:
+            db.close()
 
     @staticmethod
     def get_by_id(dataset_id: str) -> Optional[Dict[str, Any]]:
         """Get dataset by ID"""
-        datasets = load_db(DATASETS_DB)
-        for dataset in datasets:
-            if dataset.get("id") == dataset_id:
-                return dataset
-        return None
+        db = SessionLocal()
+        try:
+            dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+            return model_to_dict(dataset)
+        finally:
+            db.close()
 
     @staticmethod
     def create(dataset_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create new dataset"""
-        datasets = load_db(DATASETS_DB)
+        db = SessionLocal()
+        try:
+            # Map 'size' to 'total_samples' if provided (for API compatibility)
+            total_samples = dataset_data.get("total_samples")
+            if total_samples is None and "size" in dataset_data:
+                total_samples = dataset_data.get("size", 0)
+            if total_samples is None:
+                total_samples = 0
 
-        new_dataset = {
-            "id": generate_id(),
-            "readiness": dataset_data.get("readiness", "draft"),  # Use provided readiness or default to draft
-            **dataset_data,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
-            "last_modified": datetime.now().strftime("%Y-%m-%d"),
-            "freshness": datetime.now().strftime("%Y-%m-%d")
-        }
+            # Map 'path' to 'file_path' if provided
+            file_path = dataset_data.get("file_path") or dataset_data.get("path")
 
-        datasets.append(new_dataset)
-        save_db(DATASETS_DB, datasets)
-        return new_dataset
+            # Handle UUID - use provided ID or let database generate one
+            dataset_id = dataset_data.get("id")
+
+            # Create new dataset instance
+            dataset_kwargs = {
+                "name": dataset_data.get("name"),
+                "domain": dataset_data.get("domain"),
+                "readiness": dataset_data.get("readiness", "draft"),
+                "description": dataset_data.get("description"),
+                "structure": dataset_data.get("structure"),
+                "file_path": file_path,
+                "file_size": dataset_data.get("file_size"),
+                "file_format": dataset_data.get("file_format"),
+                "total_samples": total_samples,
+                "train_samples": dataset_data.get("train_samples"),
+                "val_samples": dataset_data.get("val_samples"),
+                "test_samples": dataset_data.get("test_samples"),
+                "tags": dataset_data.get("tags", []),
+                "meta_data": dataset_data.get("metadata"),
+            }
+
+            # Add id if provided (for upload endpoint that pre-generates UUID)
+            if dataset_id:
+                dataset_kwargs["id"] = dataset_id
+
+            new_dataset = Dataset(**dataset_kwargs)
+
+            db.add(new_dataset)
+            db.commit()
+            db.refresh(new_dataset)
+
+            return model_to_dict(new_dataset)
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
     @staticmethod
     def update(dataset_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update dataset"""
-        datasets = load_db(DATASETS_DB)
+        db = SessionLocal()
+        try:
+            dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
 
-        for i, dataset in enumerate(datasets):
-            if dataset.get("id") == dataset_id:
-                # Update fields
-                for key, value in update_data.items():
-                    if value is not None:
-                        dataset[key] = value
-                dataset["updated_at"] = datetime.now().isoformat()
-                datasets[i] = dataset
-                save_db(DATASETS_DB, datasets)
-                return dataset
+            if not dataset:
+                return None
 
-        return None
+            # Update fields
+            for key, value in update_data.items():
+                if value is not None and hasattr(dataset, key):
+                    setattr(dataset, key, value)
+
+            db.commit()
+            db.refresh(dataset)
+
+            return model_to_dict(dataset)
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
     @staticmethod
     def delete(dataset_id: str) -> bool:
         """Delete dataset"""
-        datasets = load_db(DATASETS_DB)
-        original_len = len(datasets)
-        datasets = [d for d in datasets if d.get("id") != dataset_id]
+        db = SessionLocal()
+        try:
+            dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
 
-        if len(datasets) < original_len:
-            save_db(DATASETS_DB, datasets)
+            if not dataset:
+                return False
+
+            db.delete(dataset)
+            db.commit()
             return True
-        return False
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
 # ============= Model Operations =============
 
@@ -137,74 +217,113 @@ class ModelDB:
     @staticmethod
     def get_all(task: Optional[str] = None, status: Optional[str] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all models with optional filters"""
-        models = load_db(MODELS_DB)
+        db = SessionLocal()
+        try:
+            query = db.query(Model)
 
-        # Apply filters
-        if task:
-            models = [m for m in models if m.get("task") == task]
-        if status:
-            models = [m for m in models if m.get("status") == status]
-        if search:
-            search_lower = search.lower()
-            models = [m for m in models if search_lower in m.get("name", "").lower()]
+            # Apply filters
+            if task:
+                query = query.filter(Model.task == task)
+            if status:
+                query = query.filter(Model.status == status)
+            if search:
+                search_pattern = f"%{search}%"
+                query = query.filter(Model.name.ilike(search_pattern))
 
-        return models
+            # Order by created_at descending (newest first)
+            query = query.order_by(Model.created_at.desc())
+
+            models = query.all()
+            return [model_to_dict(m) for m in models]
+        finally:
+            db.close()
 
     @staticmethod
     def get_by_id(model_id: str) -> Optional[Dict[str, Any]]:
         """Get model by ID"""
-        models = load_db(MODELS_DB)
-        for model in models:
-            if model.get("id") == model_id:
-                return model
-        return None
+        db = SessionLocal()
+        try:
+            model = db.query(Model).filter(Model.id == model_id).first()
+            return model_to_dict(model)
+        finally:
+            db.close()
 
     @staticmethod
     def create(model_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create new model"""
-        models = load_db(MODELS_DB)
+        db = SessionLocal()
+        try:
+            # Create new model instance
+            new_model = Model(
+                name=model_data.get("name"),
+                description=model_data.get("description"),
+                task=model_data.get("task"),
+                framework=model_data.get("framework"),
+                version=model_data.get("version", "v0.1.0"),
+                status=model_data.get("status", "draft"),
+                accuracy=model_data.get("accuracy"),
+                loss=model_data.get("loss"),
+                dataset_id=model_data.get("dataset_id"),
+                model_path=model_data.get("model_path"),
+                tags=model_data.get("tags", []),
+                hyperparameters=model_data.get("hyperparameters"),
+                metrics=model_data.get("metrics"),
+            )
 
-        new_model = {
-            "id": generate_id(),
-            **model_data,
-            "version": "v0.1.0",
-            "status": "draft",
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
+            db.add(new_model)
+            db.commit()
+            db.refresh(new_model)
 
-        models.append(new_model)
-        save_db(MODELS_DB, models)
-        return new_model
+            return model_to_dict(new_model)
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
     @staticmethod
     def update(model_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update model"""
-        models = load_db(MODELS_DB)
+        db = SessionLocal()
+        try:
+            model = db.query(Model).filter(Model.id == model_id).first()
 
-        for i, model in enumerate(models):
-            if model.get("id") == model_id:
-                for key, value in update_data.items():
-                    if value is not None:
-                        model[key] = value
-                model["updated_at"] = datetime.now().isoformat()
-                models[i] = model
-                save_db(MODELS_DB, models)
-                return model
+            if not model:
+                return None
 
-        return None
+            # Update fields
+            for key, value in update_data.items():
+                if value is not None and hasattr(model, key):
+                    setattr(model, key, value)
+
+            db.commit()
+            db.refresh(model)
+
+            return model_to_dict(model)
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
     @staticmethod
     def delete(model_id: str) -> bool:
         """Delete model"""
-        models = load_db(MODELS_DB)
-        original_len = len(models)
-        models = [m for m in models if m.get("id") != model_id]
+        db = SessionLocal()
+        try:
+            model = db.query(Model).filter(Model.id == model_id).first()
 
-        if len(models) < original_len:
-            save_db(MODELS_DB, models)
+            if not model:
+                return False
+
+            db.delete(model)
+            db.commit()
             return True
-        return False
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
 # ============= Job Operations =============
 
@@ -214,66 +333,99 @@ class JobDB:
     @staticmethod
     def get_all(status: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all jobs with optional status filter"""
-        jobs = load_db(JOBS_DB)
+        db = SessionLocal()
+        try:
+            query = db.query(Job)
 
-        if status:
-            jobs = [j for j in jobs if j.get("status") == status]
+            if status:
+                query = query.filter(Job.status == status)
 
-        return jobs
+            # Order by created_at descending (newest first)
+            query = query.order_by(Job.created_at.desc())
+
+            jobs = query.all()
+            return [model_to_dict(j) for j in jobs]
+        finally:
+            db.close()
 
     @staticmethod
     def get_by_id(job_id: str) -> Optional[Dict[str, Any]]:
         """Get job by ID"""
-        jobs = load_db(JOBS_DB)
-        for job in jobs:
-            if job.get("id") == job_id:
-                return job
-        return None
+        db = SessionLocal()
+        try:
+            job = db.query(Job).filter(Job.id == job_id).first()
+            return model_to_dict(job)
+        finally:
+            db.close()
 
     @staticmethod
     def create(job_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create new job"""
-        jobs = load_db(JOBS_DB)
+        db = SessionLocal()
+        try:
+            # Create new job instance
+            new_job = Job(
+                job_type=job_data.get("job_type", "training"),
+                status=job_data.get("status", "pending"),
+                progress=job_data.get("progress", 0.0),
+                model_id=job_data.get("model_id"),
+                dataset_id=job_data.get("dataset_id"),
+                config=job_data.get("config"),
+                result=job_data.get("result"),
+                error=job_data.get("error"),
+            )
 
-        new_job = {
-            "id": generate_id(),
-            **job_data,
-            "status": "pending",
-            "progress": 0.0,
-            "current_iteration": 0,
-            "created_at": datetime.now().isoformat(),
-            "started_at": None,
-            "completed_at": None
-        }
+            db.add(new_job)
+            db.commit()
+            db.refresh(new_job)
 
-        jobs.append(new_job)
-        save_db(JOBS_DB, jobs)
-        return new_job
+            return model_to_dict(new_job)
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
     @staticmethod
     def update(job_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update job"""
-        jobs = load_db(JOBS_DB)
+        db = SessionLocal()
+        try:
+            job = db.query(Job).filter(Job.id == job_id).first()
 
-        for i, job in enumerate(jobs):
-            if job.get("id") == job_id:
-                for key, value in update_data.items():
-                    if value is not None:
-                        job[key] = value
-                jobs[i] = job
-                save_db(JOBS_DB, jobs)
-                return job
+            if not job:
+                return None
 
-        return None
+            # Update fields
+            for key, value in update_data.items():
+                if value is not None and hasattr(job, key):
+                    setattr(job, key, value)
+
+            db.commit()
+            db.refresh(job)
+
+            return model_to_dict(job)
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
     @staticmethod
     def delete(job_id: str) -> bool:
         """Delete job"""
-        jobs = load_db(JOBS_DB)
-        original_len = len(jobs)
-        jobs = [j for j in jobs if j.get("id") != job_id]
+        db = SessionLocal()
+        try:
+            job = db.query(Job).filter(Job.id == job_id).first()
 
-        if len(jobs) < original_len:
-            save_db(JOBS_DB, jobs)
+            if not job:
+                return False
+
+            db.delete(job)
+            db.commit()
             return True
-        return False
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
