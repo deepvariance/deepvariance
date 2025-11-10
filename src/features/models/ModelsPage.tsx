@@ -24,6 +24,7 @@ import { useModels, useDeleteModel } from '@/shared/hooks/useModels'
 import { formatDate } from '@/shared/utils/formatters'
 import type { Model } from '@/shared/api/models'
 import { TrainModelModal } from './TrainModelModal'
+import { TrainingProgress } from './TrainingProgress'
 
 const taskColors: Record<string, string> = {
   classification: 'blue',
@@ -312,39 +313,7 @@ export function ModelsPage() {
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Badge
-                        variant={model.status === 'ready' || model.status === 'active' ? 'light' : 'outline'}
-                        color={statusColors[model.status] || 'gray'}
-                        styles={{
-                          root: {
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            textTransform: 'capitalize',
-                            paddingLeft: 10,
-                            paddingRight: 10,
-                            backgroundColor:
-                              model.status === 'ready' || model.status === 'active'
-                                ? '#D4F4DD'
-                                : 'transparent',
-                            color:
-                              model.status === 'ready' || model.status === 'active'
-                                ? '#16A34A'
-                                : model.status === 'training'
-                                  ? '#3B82F6'
-                                  : model.status === 'queued'
-                                    ? '#0891B2'
-                                    : model.status === 'failed'
-                                      ? '#EF4444'
-                                      : '#F97316',
-                            borderColor:
-                              model.status === 'ready' || model.status === 'active'
-                                ? 'transparent'
-                                : statusColors[model.status] || '#F97316',
-                          },
-                        }}
-                      >
-                        {model.status}
-                      </Badge>
+                      <TrainingProgress model={model} />
                     </Table.Td>
                     <Table.Td>
                       <Text size="15px" c="dimmed">

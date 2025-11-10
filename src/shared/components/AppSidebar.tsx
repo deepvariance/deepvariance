@@ -271,14 +271,14 @@ export function AppSidebar() {
                   }}
                 >
                   <Text size="11px" c={COLORS.GRAY_400}>
-                    16.2 / 16 GB
+                    Usage
                   </Text>
                   <Text size="11px" fw={600} c={COLORS.WARNING}>
-                    42%
+                    45%
                   </Text>
                 </Box>
                 <Progress
-                  value={42}
+                  value={45}
                   size="sm"
                   radius="xl"
                   styles={{
@@ -339,12 +339,52 @@ export function AppSidebar() {
                   }}
                 />
               </Box>
+
+              <Box>
+                <Box
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text size="13px" c={COLORS.GRAY_500}>
+                    RAM
+                  </Text>
+                  <Text size="13px" fw={600} c={COLORS.GRAY_700}>
+                    16.2 / 32 GB
+                  </Text>
+                </Box>
+                <Box
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginBottom: 6,
+                  }}
+                >
+                  <Text size="11px" c={COLORS.GRAY_400}>
+                    Memory
+                  </Text>
+                  <Text size="11px" fw={600} c="#2563EB">
+                    51%
+                  </Text>
+                </Box>
+                <Progress
+                  value={51}
+                  size="sm"
+                  radius="xl"
+                  styles={{
+                    root: { backgroundColor: COLORS.GRAY_100 },
+                    section: { backgroundColor: '#2563EB' },
+                  }}
+                />
+              </Box>
             </Stack>
           ) : (
             <Stack gap={12} align="center">
               <Box style={{ width: '100%' }}>
                 <Progress
-                  value={42}
+                  value={45}
                   size="xs"
                   radius="xl"
                   styles={{
@@ -361,6 +401,17 @@ export function AppSidebar() {
                   styles={{
                     root: { backgroundColor: COLORS.GRAY_100 },
                     section: { backgroundColor: COLORS.SUCCESS },
+                  }}
+                />
+              </Box>
+              <Box style={{ width: '100%' }}>
+                <Progress
+                  value={51}
+                  size="xs"
+                  radius="xl"
+                  styles={{
+                    root: { backgroundColor: COLORS.GRAY_100 },
+                    section: { backgroundColor: '#2563EB' },
                   }}
                 />
               </Box>

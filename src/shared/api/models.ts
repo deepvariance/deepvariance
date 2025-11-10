@@ -19,6 +19,13 @@ export interface Model {
   model_path?: string
   tags: string[]
   description?: string
+  // Training progress fields
+  current_iteration?: number
+  total_iterations?: number
+  current_accuracy?: number
+  best_accuracy?: number
+  hyperparameters?: Record<string, any>
+  metrics?: Record<string, any>
 }
 
 export interface ModelsFilters {

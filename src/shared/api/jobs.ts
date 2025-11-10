@@ -9,7 +9,6 @@ export interface HyperparametersConfig {
   batch_size?: number
   optimizer?: 'Adam' | 'SGD' | 'RMSprop'
   dropout_rate?: number
-  epochs?: number
   max_iterations?: number
   target_accuracy?: number
 }
@@ -29,6 +28,8 @@ export interface TrainingJob {
   started_at?: string
   completed_at?: string
   error_message?: string
+  elapsed_time?: string  // Human-readable elapsed time (e.g., "2h 15m")
+  estimated_remaining?: string  // Human-readable estimated time (e.g., "45m 32s")
 }
 
 export interface TrainingJobCreate {

@@ -8,16 +8,16 @@ export interface Dataset {
   id: string
   name: string
   domain: 'tabular' | 'vision' | 'text' | 'audio'
-  size: number // Number of files
+  size: number | null // Number of files (can be null)
   readiness: 'ready' | 'profiling' | 'processing' | 'draft' | 'error'
   storage: 'local' | 'gcs' | 's3'
-  path: string
+  path: string | null // Path can be null
   tags: string[]
   description?: string
   created_at: string
   updated_at: string
-  last_modified?: string
-  freshness?: string
+  last_modified?: string | null
+  freshness?: string | null
 }
 
 export interface DatasetsFilters {
@@ -27,13 +27,29 @@ export interface DatasetsFilters {
 }
 
 /**
+ * Sanitize dataset data to handle null values gracefully
+ */
+const sanitizeDataset = (dataset: any): Dataset => {
+  return {
+    ...dataset,
+    size: dataset.size ?? 0, // Default to 0 if null
+    path: dataset.path ?? '', // Default to empty string if null
+    tags: dataset.tags ?? [], // Default to empty array if null
+    description: dataset.description ?? undefined,
+    last_modified: dataset.last_modified ?? null,
+    freshness: dataset.freshness ?? null,
+  }
+}
+
+/**
  * Fetch all datasets with optional filters
  */
 export const getDatasets = async (filters?: DatasetsFilters): Promise<Dataset[]> => {
   const { data } = await apiClient.get<Dataset[]>('/datasets', {
     params: filters,
   })
-  return data
+  // Sanitize each dataset to handle null values
+  return data.map(sanitizeDataset)
 }
 
 /**
@@ -41,7 +57,7 @@ export const getDatasets = async (filters?: DatasetsFilters): Promise<Dataset[]>
  */
 export const getDataset = async (id: string): Promise<Dataset> => {
   const { data } = await apiClient.get<Dataset>(`/datasets/${id}`)
-  return data
+  return sanitizeDataset(data)
 }
 
 /**

@@ -1,367 +1,574 @@
+import { useState } from 'react'
 import {
   Box,
   Button,
   Card,
   Group,
-  Loader,
   Stack,
   Text,
   Title,
+  Badge,
+  SimpleGrid,
+  Progress,
+  Divider,
 } from '@mantine/core'
 import {
+  IconUpload,
   IconBolt,
   IconDatabase,
-  IconDownload,
   IconStack2,
+  IconChartBar,
+  IconClock,
 } from '@tabler/icons-react'
-import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DatasetSelector } from '@/shared/components'
-import type { DatasetOption } from '@/shared/types'
-import { COLORS } from '@/shared/config/colors'
 import { useDatasets } from '@/shared/hooks/useDatasets'
-import { formatters } from '@/shared/utils/formatters'
-
-interface RecentItem {
-  id: string
-  name: string
-  type: 'Model' | 'Dataset'
-  timestamp: string
-}
-
-const recentItems: RecentItem[] = [
-  {
-    id: '1',
-    name: 'credit-risk-classifier',
-    type: 'Model',
-    timestamp: '2 Hours Ago',
-  },
-  {
-    id: '2',
-    name: 'credit-default-2023',
-    type: 'Dataset',
-    timestamp: '2 Hours Ago',
-  },
-  {
-    id: '3',
-    name: 'customer-churn-predictor',
-    type: 'Model',
-    timestamp: '1 Day Ago',
-  },
-  {
-    id: '4',
-    name: 'customer-behavior-logs',
-    type: 'Dataset',
-    timestamp: '2 Days Ago',
-  },
-]
+import { useModels } from '@/shared/hooks/useModels'
+import { ImportDatasetModal } from '@/features/datasets/ImportDatasetModal'
+import { TrainModelModal } from '@/features/models/TrainModelModal'
+import { formatDate } from '@/shared/utils/formatters'
 
 export function HomePage() {
   const navigate = useNavigate()
-  const [selectedDataset, setSelectedDataset] = useState<string>('')
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [trainModalOpen, setTrainModalOpen] = useState(false)
 
-  // Fetch datasets from API
-  const { data: apiDatasets, isLoading: isDatasetsLoading } = useDatasets()
+  // Fetch data
+  const { data: datasets = [] } = useDatasets()
+  const { data: models = [] } = useModels()
 
-  // Transform API datasets to DatasetOption format
-  const datasets: DatasetOption[] = useMemo(() => {
-    if (!apiDatasets) return []
+  // Calculate stats
+  const readyDatasets = datasets.filter(d => d.readiness === 'ready').length
+  const totalModels = models.length
+  const trainingModels = models.filter(m => m.status === 'training' || m.status === 'queued')
 
-    return apiDatasets
-      .filter(dataset => dataset.readiness === 'ready')
-      .map(dataset => ({
-        value: dataset.id,
-        label: dataset.name,
-        domain: formatters.domain(dataset.domain),
-        rows: `${dataset.size} files`,
-        tags: dataset.tags || [],
-        storage: formatters.storage(dataset.storage),
-      }))
-  }, [apiDatasets])
-
-  // Set initial selected dataset when data loads
-  useEffect(() => {
-    if (datasets.length > 0 && !selectedDataset) {
-      setSelectedDataset(datasets[0].value)
-    }
-  }, [datasets, selectedDataset])
+  // Get recent activity (last 5 items)
+  const recentActivity = [
+    ...datasets.slice(0, 3).map(d => ({
+      id: d.id,
+      name: d.name,
+      type: 'dataset' as const,
+      timestamp: d.created_at,
+      status: d.readiness,
+    })),
+    ...models.slice(0, 3).map(m => ({
+      id: m.id,
+      name: m.name,
+      type: 'model' as const,
+      timestamp: m.created_at,
+      status: m.status,
+    })),
+  ]
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 5)
 
   return (
-    <Stack
-      gap={0}
-      style={{ backgroundColor: COLORS.GRAY_50, paddingBottom: '2rem' }}
-    >
+    <Stack gap={0} style={{ minHeight: '100vh', backgroundColor: '#FAFAFA' }}>
       {/* Header Section */}
-      <Box px={32} pt={40} pb={24}>
-        <Title order={1} size={32} fw={700} mb={8}>
+      <Box px={32} pt={40} pb={32}>
+        <Title order={1} size={36} fw={700} mb={8}>
           Welcome to DeepVariance
         </Title>
-        <Text size="15px" c="dimmed">
-          Research-first machine learning platform for model development and
-          dataset management
+        <Text size="16px" c="dimmed">
+          From dataset to model in minutes. Start training with just a few clicks.
         </Text>
       </Box>
 
       {/* Main Content */}
       <Box px={32}>
-        <Group align="stretch" gap={24} wrap="nowrap">
-          {/* Launch Training Card */}
+        {/* Stats Row */}
+        <SimpleGrid cols={3} spacing={20} mb={32}>
           <Card
-            shadow="none"
-            padding={32}
+            shadow="sm"
+            padding="lg"
             radius={12}
             withBorder
             style={{
-              width: 520,
-              borderColor: COLORS.GRAY_200,
+              borderColor: '#E5E7EB',
+              backgroundColor: 'white',
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            }}
+            onClick={() => navigate('/datasets')}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'none'
+            }}
+          >
+            <Group justify="space-between">
+              <div>
+                <Text size="14px" c="dimmed" fw={500} mb={8}>
+                  Datasets
+                </Text>
+                <Text size="32px" fw={700}>
+                  {readyDatasets}
+                </Text>
+                <Text size="13px" c="dimmed" mt={4}>
+                  Ready to use
+                </Text>
+              </div>
+              <Box
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 12,
+                  backgroundColor: '#E0F2FE',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <IconDatabase size={28} color="#0284C7" />
+              </Box>
+            </Group>
+          </Card>
+
+          <Card
+            shadow="sm"
+            padding="lg"
+            radius={12}
+            withBorder
+            style={{
+              borderColor: '#E5E7EB',
+              backgroundColor: 'white',
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            }}
+            onClick={() => navigate('/models')}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'none'
+            }}
+          >
+            <Group justify="space-between">
+              <div>
+                <Text size="14px" c="dimmed" fw={500} mb={8}>
+                  Models
+                </Text>
+                <Text size="32px" fw={700}>
+                  {totalModels}
+                </Text>
+                <Text size="13px" c="dimmed" mt={4}>
+                  Total trained
+                </Text>
+              </div>
+              <Box
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 12,
+                  backgroundColor: '#FFE8E6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <IconStack2 size={28} color="#FF5C4D" />
+              </Box>
+            </Group>
+          </Card>
+
+          <Card
+            shadow="sm"
+            padding="lg"
+            radius={12}
+            withBorder
+            style={{
+              borderColor: '#E5E7EB',
               backgroundColor: 'white',
             }}
           >
-            <Stack gap={20}>
-              <Title order={3} size={20} fw={600}>
-                Launch a new training run
-              </Title>
-
-              <Text size="15px" c="dimmed">
-                Choose an uploaded dataset to kick off training immediately, or
-                import a new dataset to get started.
-              </Text>
-
-              {/* Dataset Picker Section */}
-              <Box>
-                <Text
-                  size="13px"
-                  fw={500}
-                  c="dimmed"
-                  mb={12}
-                  tt="uppercase"
-                  style={{ letterSpacing: '0.5px' }}
-                >
-                  Pick a Dataset
+            <Group justify="space-between">
+              <div>
+                <Text size="14px" c="dimmed" fw={500} mb={8}>
+                  Training
                 </Text>
-
-                {isDatasetsLoading ? (
-                  <Box
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minHeight: 110,
-                      border: `1px solid ${COLORS.GRAY_200}`,
-                      borderRadius: 6,
-                    }}
-                  >
-                    <Loader size="sm" color={COLORS.PRIMARY} />
-                  </Box>
-                ) : datasets.length === 0 ? (
-                  <Box
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minHeight: 110,
-                      border: `1px solid ${COLORS.GRAY_200}`,
-                      borderRadius: 6,
-                      backgroundColor: COLORS.GRAY_50,
-                    }}
-                  >
-                    <Text size="15px" c="dimmed">
-                      No ready datasets available. Import a dataset to get started.
-                    </Text>
-                  </Box>
-                ) : (
-                  <DatasetSelector
-                    datasets={datasets}
-                    value={selectedDataset}
-                    onChange={setSelectedDataset}
-                  />
-                )}
-
-                {/* Action Buttons */}
-                <Group gap={12} mt={10} justify="flex-end">
-                  <Button
-                    leftSection={<IconBolt size={18} />}
-                    color="orange"
-                    size="md"
-                    onClick={() => navigate('/models/train')}
-                    styles={{
-                      root: {
-                        backgroundColor: COLORS.PRIMARY,
-                        fontSize: '15px',
-                        fontWeight: 500,
-                      },
-                    }}
-                  >
-                    Start Training
-                  </Button>
-                  <Button
-                    leftSection={<IconDownload size={18} />}
-                    variant="light"
-                    color="orange"
-                    size="md"
-                    onClick={() => navigate('/datasets')}
-                    styles={{
-                      root: {
-                        fontSize: '15px',
-                        fontWeight: 500,
-                      },
-                    }}
-                  >
-                    View Datasets
-                  </Button>
-                </Group>
+                <Text size="32px" fw={700}>
+                  {trainingModels.length}
+                </Text>
+                <Text size="13px" c="dimmed" mt={4}>
+                  Active jobs
+                </Text>
+              </div>
+              <Box
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 12,
+                  backgroundColor: '#DBEAFE',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <IconChartBar size={28} color="#2563EB" />
               </Box>
+            </Group>
+          </Card>
+        </SimpleGrid>
+
+        {/* Quick Actions Row */}
+        <SimpleGrid cols={2} spacing={24} mb={32}>
+          {/* Import Dataset Card */}
+          <Card
+            shadow="md"
+            padding={32}
+            radius={16}
+            withBorder
+            style={{
+              borderColor: '#E5E7EB',
+              backgroundColor: 'white',
+              background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            }}
+          >
+            <Stack gap={24}>
+              <Group gap={16}>
+                <Box
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 16,
+                    backgroundColor: '#DBEAFE',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <IconUpload size={32} color="#2563EB" />
+                </Box>
+                <div style={{ flex: 1 }}>
+                  <Title order={3} size={22} fw={600} mb={6}>
+                    Import Dataset
+                  </Title>
+                  <Text size="14px" c="dimmed">
+                    Upload a new dataset to get started
+                  </Text>
+                </div>
+              </Group>
+
+              <Divider />
+
+              <Stack gap={12}>
+                <Group gap={8}>
+                  <Badge variant="light" color="blue" size="lg">
+                    Vision
+                  </Badge>
+                  <Badge variant="light" color="blue" size="lg">
+                    Tabular
+                  </Badge>
+                </Group>
+                <Text size="14px" c="dimmed">
+                  Supports Vision and Tabular datasets up to 100GB
+                </Text>
+              </Stack>
+
+              <Button
+                size="lg"
+                leftSection={<IconUpload size={20} />}
+                variant="gradient"
+                gradient={{ from: 'blue', to: 'cyan', deg: 90 }}
+                onClick={() => setImportModalOpen(true)}
+                styles={{
+                  root: {
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    height: 48,
+                  },
+                }}
+              >
+                Upload Dataset
+              </Button>
+
+              <Text size="13px" c="dimmed" ta="center">
+                {readyDatasets > 0 ? (
+                  <>
+                    You have <strong>{readyDatasets}</strong> dataset{readyDatasets !== 1 ? 's' : ''} ready
+                  </>
+                ) : (
+                  'No datasets yet. Upload your first one!'
+                )}
+              </Text>
             </Stack>
           </Card>
 
-          {/* Recently Opened Card */}
+          {/* Train Model Card */}
           <Card
-            shadow="none"
+            shadow="md"
             padding={32}
-            radius={12}
+            radius={16}
             withBorder
             style={{
-              flex: 1,
-              borderColor: COLORS.GRAY_200,
+              borderColor: '#E5E7EB',
+              backgroundColor: 'white',
+              background: 'linear-gradient(135deg, #ffffff 0%, #fff7f6 100%)',
+            }}
+          >
+            <Stack gap={24}>
+              <Group gap={16}>
+                <Box
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 16,
+                    backgroundColor: '#FFE8E6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <IconBolt size={32} color="#FF5C4D" />
+                </Box>
+                <div style={{ flex: 1 }}>
+                  <Title order={3} size={22} fw={600} mb={6}>
+                    Train Model
+                  </Title>
+                  <Text size="14px" c="dimmed">
+                    Start a new training job
+                  </Text>
+                </div>
+              </Group>
+
+              <Divider />
+
+              <Stack gap={12}>
+                <Group gap={8}>
+                  <Badge variant="light" color="orange" size="lg">
+                    Classification
+                  </Badge>
+                  <Badge variant="light" color="orange" size="lg">
+                    Detection
+                  </Badge>
+                </Group>
+                <Text size="14px" c="dimmed">
+                  Classification, Regression, Clustering, Detection
+                </Text>
+              </Stack>
+
+              <Button
+                size="lg"
+                leftSection={<IconBolt size={20} />}
+                color="orange"
+                onClick={() => setTrainModalOpen(true)}
+                disabled={readyDatasets === 0}
+                styles={{
+                  root: {
+                    backgroundColor: '#FF5C4D',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    height: 48,
+                  },
+                }}
+              >
+                Start Training
+              </Button>
+
+              <Text size="13px" c="dimmed" ta="center">
+                {readyDatasets > 0 ? (
+                  <>
+                    {totalModels > 0 ? `${totalModels} model${totalModels !== 1 ? 's' : ''} trained` : 'Train your first model!'}
+                  </>
+                ) : (
+                  'Upload a dataset first to train models'
+                )}
+              </Text>
+            </Stack>
+          </Card>
+        </SimpleGrid>
+
+        {/* Active Training Jobs */}
+        {trainingModels.length > 0 && (
+          <Card
+            shadow="sm"
+            padding={24}
+            radius={12}
+            withBorder
+            mb={32}
+            style={{
+              borderColor: '#E5E7EB',
               backgroundColor: 'white',
             }}
           >
-            <Title order={3} size={20} fw={600} mb={24}>
-              Recently Opened
+            <Title order={4} size={18} fw={600} mb={20}>
+              Active Training Jobs ({trainingModels.length})
             </Title>
-
-            <Stack gap={0}>
-              {recentItems.map(item => (
-                <Group
-                  key={item.id}
-                  justify="space-between"
-                  p={12}
+            <Stack gap={16}>
+              {trainingModels.map((model) => (
+                <Box
+                  key={model.id}
+                  p={16}
                   style={{
+                    borderRadius: 8,
+                    backgroundColor: '#F9FAFB',
+                    border: '1px solid #E5E7EB',
                     cursor: 'pointer',
-                    borderRadius: 6,
-                    transition: 'background-color 0.15s ease',
-                    backgroundColor:
-                      hoveredItem === item.id ? COLORS.PRIMARY_LIGHT : 'transparent',
+                    transition: 'background-color 0.2s ease',
                   }}
-                  onMouseEnter={() => setHoveredItem(item.id)}
-                  onMouseLeave={() => setHoveredItem(null)}
+                  onClick={() => navigate(`/models/${model.id}/training`)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#F3F4F6'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#F9FAFB'
+                  }}
                 >
-                  <Group gap={12}>
-                    <Box
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 6,
-                        backgroundColor:
-                          item.type === 'Model' ? COLORS.PRIMARY_HOVER : COLORS.SUCCESS_LIGHT,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
+                  <Group justify="space-between" mb={12}>
+                    <Group gap={12}>
+                      <Box
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 6,
+                          backgroundColor: '#FFE8E6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <IconStack2 size={16} color="#FF5C4D" />
+                      </Box>
+                      <div>
+                        <Text size="15px" fw={500}>
+                          {model.name}
+                        </Text>
+                        <Text size="13px" c="dimmed">
+                          {model.task.charAt(0).toUpperCase() + model.task.slice(1)}
+                        </Text>
+                      </div>
+                    </Group>
+                    <Badge
+                      variant="light"
+                      color={model.status === 'training' ? 'blue' : 'cyan'}
+                      size="lg"
                     >
-                      {item.type === 'Model' ? (
-                        <IconStack2 size={18} color={COLORS.PRIMARY} />
-                      ) : (
-                        <IconDatabase size={18} color={COLORS.SUCCESS} />
-                      )}
-                    </Box>
-                    <div>
-                      <Text size="15px" fw={500} mb={2}>
-                        {item.name}
-                      </Text>
-                      <Text size="13px" c="dimmed">
-                        {item.type} • {item.timestamp}
-                      </Text>
-                    </div>
+                      {model.status === 'training' ? 'Training' : 'Queued'}
+                    </Badge>
                   </Group>
-                </Group>
+                  {model.status === 'training' && (
+                    <>
+                      <Progress
+                        value={Math.random() * 100}
+                        size="sm"
+                        color="blue"
+                        animated
+                        mb={8}
+                      />
+                      <Text size="12px" c="dimmed">
+                        Estimated time remaining: ~{Math.floor(Math.random() * 30 + 10)} minutes
+                      </Text>
+                    </>
+                  )}
+                </Box>
               ))}
             </Stack>
           </Card>
-        </Group>
+        )}
 
-        {/* Bottom Row */}
-        <Group align="stretch" gap={24} mt={24} wrap="nowrap">
-          {/* System Status */}
+        {/* Recent Activity */}
+        {recentActivity.length > 0 && (
           <Card
-            shadow="none"
-            padding={32}
+            shadow="sm"
+            padding={24}
             radius={12}
             withBorder
             style={{
-              flex: 1,
-              borderColor: COLORS.GRAY_200,
+              borderColor: '#E5E7EB',
               backgroundColor: 'white',
             }}
           >
-            <Title order={3} size={20} fw={600} mb={24}>
-              System Status
+            <Title order={4} size={18} fw={600} mb={20}>
+              Recent Activity
             </Title>
-
-            <Stack gap={16}>
-              <Group justify="space-between">
-                <Text size="15px" c="dimmed">
-                  Environment
-                </Text>
-                <Group gap={8}>
-                  <Box
+            <Stack gap={0}>
+              {recentActivity.map((item, index) => (
+                <Box key={item.id}>
+                  <Group
+                    justify="space-between"
+                    p={12}
                     style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      backgroundColor: COLORS.SUCCESS,
+                      cursor: 'pointer',
+                      borderRadius: 6,
+                      transition: 'background-color 0.15s ease',
                     }}
-                  />
-                  <Text size="15px" fw={500}>
-                    Active
-                  </Text>
-                </Group>
-              </Group>
-
-              <Group justify="space-between">
-                <Text size="15px" c="dimmed">
-                  GPU Slots
-                </Text>
-                <Text size="15px" fw={500}>
-                  2 available
-                </Text>
-              </Group>
+                    onClick={() =>
+                      navigate(item.type === 'dataset' ? `/datasets/${item.id}` : `/models/${item.id}`)
+                    }
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#F9FAFB'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent'
+                    }}
+                  >
+                    <Group gap={12}>
+                      <Box
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 8,
+                          backgroundColor: item.type === 'dataset' ? '#E0F2FE' : '#FFE8E6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {item.type === 'dataset' ? (
+                          <IconDatabase size={18} color="#0284C7" />
+                        ) : (
+                          <IconStack2 size={18} color="#FF5C4D" />
+                        )}
+                      </Box>
+                      <div>
+                        <Text size="15px" fw={500} mb={2}>
+                          {item.name}
+                        </Text>
+                        <Group gap={8}>
+                          <Badge
+                            variant="light"
+                            size="sm"
+                            color={item.type === 'dataset' ? 'blue' : 'orange'}
+                          >
+                            {item.type === 'dataset' ? 'Dataset' : 'Model'}
+                          </Badge>
+                          <Text size="13px" c="dimmed">
+                            <IconClock size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                            {formatDate(item.timestamp)}
+                          </Text>
+                        </Group>
+                      </div>
+                    </Group>
+                    <Badge
+                      variant="dot"
+                      color={
+                        item.status === 'ready' || item.status === 'active'
+                          ? 'green'
+                          : item.status === 'training'
+                            ? 'blue'
+                            : 'orange'
+                      }
+                    >
+                      {item.status}
+                    </Badge>
+                  </Group>
+                  {index < recentActivity.length - 1 && (
+                    <Divider my={0} style={{ marginLeft: 60 }} />
+                  )}
+                </Box>
+              ))}
             </Stack>
           </Card>
-
-          {/* What's New */}
-          <Card
-            shadow="none"
-            padding={32}
-            radius={12}
-            withBorder
-            style={{
-              flex: 1,
-              borderColor: COLORS.GRAY_200,
-              backgroundColor: 'white',
-            }}
-          >
-            <Title order={3} size={20} fw={600} mb={24}>
-              What's New
-            </Title>
-
-            <Text size="15px" c="dimmed">
-              Check out the latest features and improvements in the{' '}
-              <Text
-                span
-                size="15px"
-                c={COLORS.PRIMARY}
-                fw={500}
-                style={{ cursor: 'pointer' }}
-              >
-                release notes
-              </Text>
-              .
-            </Text>
-          </Card>
-        </Group>
+        )}
       </Box>
+
+      {/* Modals */}
+      <ImportDatasetModal opened={importModalOpen} onClose={() => setImportModalOpen(false)} />
+      <TrainModelModal opened={trainModalOpen} onClose={() => setTrainModalOpen(false)} />
     </Stack>
   )
 }

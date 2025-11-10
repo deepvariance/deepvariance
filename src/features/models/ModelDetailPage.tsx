@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Box,
   Stack,
@@ -28,9 +28,18 @@ import {
   IconCheck,
   IconCopy,
   IconExternalLink,
+  IconChartBar,
+  IconHistory,
+  IconCircleCheck,
+  IconCircleX,
+  IconCircleMinus,
+  IconClock,
+  IconEdit,
+  IconX,
 } from '@tabler/icons-react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useModel } from '@/shared/hooks/useModels'
+import { useDataset } from '@/shared/hooks/useDatasets'
 import { formatDate } from '@/shared/utils/formatters'
 import { ROUTES, COLORS } from '@/shared/config/constants'
 
@@ -53,10 +62,31 @@ const statusColors: Record<string, string> = {
 export function ModelDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<string | null>('overview')
+  const [isEditingSummary, setIsEditingSummary] = useState(false)
+  const [summaryValue, setSummaryValue] = useState('')
 
   // Fetch model data
   const { data: model, isLoading, error } = useModel(id || '')
+
+  // Fetch dataset data if model has a dataset_id
+  const { data: dataset } = useDataset(model?.dataset_id || '')
+
+  // Set active tab from URL query parameter
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam) {
+      setActiveTab(tabParam)
+    }
+  }, [searchParams])
+
+  // Initialize summary value when model loads
+  useEffect(() => {
+    if (model?.description) {
+      setSummaryValue(model.description)
+    }
+  }, [model?.description])
 
   if (isLoading) {
     return (
@@ -150,6 +180,22 @@ export function ModelDetailPage() {
           </div>
 
           <Group gap={12}>
+            {(model.status === 'training' || model.status === 'queued') && (
+              <Button
+                variant="light"
+                color="blue"
+                leftSection={<IconChartBar size={18} />}
+                onClick={() => navigate(`/models/${model.id}/training`)}
+                styles={{
+                  root: {
+                    fontSize: '15px',
+                    fontWeight: 500,
+                  },
+                }}
+              >
+                View Training
+              </Button>
+            )}
             <Button
               variant="light"
               color="orange"
@@ -202,7 +248,7 @@ export function ModelDetailPage() {
             <Tabs.Tab value="evaluations">Evaluations</Tabs.Tab>
             <Tabs.Tab value="api">API Usage</Tabs.Tab>
             <Tabs.Tab value="versions">Versions</Tabs.Tab>
-            <Tabs.Tab value="logs">Build Logs</Tabs.Tab>
+            <Tabs.Tab value="history">Training History</Tabs.Tab>
           </Tabs.List>
 
           {/* Overview Tab */}
@@ -219,34 +265,85 @@ export function ModelDetailPage() {
                   backgroundColor: 'white',
                 }}
               >
-                <Text size="16px" fw={600} mb={16}>
-                  Summary
-                </Text>
-                <Textarea
-                  placeholder="Add a summary describing this model..."
-                  defaultValue={model.description || ''}
-                  minRows={4}
-                  styles={{
-                    input: {
-                      fontSize: '15px',
-                      borderColor: '#E5E7EB',
-                    },
-                  }}
-                />
-                <Group justify="flex-end" mt={12}>
-                  <Button
-                    variant="light"
-                    color="orange"
-                    size="sm"
-                    styles={{
-                      root: {
-                        fontSize: '14px',
-                      },
-                    }}
-                  >
-                    Save
-                  </Button>
+                <Group justify="space-between" mb={16}>
+                  <Text size="16px" fw={600}>
+                    Summary
+                  </Text>
+                  {!isEditingSummary && (
+                    <Button
+                      variant="subtle"
+                      color="gray"
+                      size="sm"
+                      leftSection={<IconEdit size={16} />}
+                      onClick={() => setIsEditingSummary(true)}
+                      styles={{
+                        root: {
+                          fontSize: '14px',
+                        },
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  )}
                 </Group>
+
+                {isEditingSummary ? (
+                  <>
+                    <Textarea
+                      placeholder="Add a summary describing this model..."
+                      value={summaryValue}
+                      onChange={(e) => setSummaryValue(e.currentTarget.value)}
+                      minRows={4}
+                      autoFocus
+                      styles={{
+                        input: {
+                          fontSize: '15px',
+                          borderColor: '#E5E7EB',
+                        },
+                      }}
+                    />
+                    <Group justify="flex-end" mt={12} gap={8}>
+                      <Button
+                        variant="subtle"
+                        color="gray"
+                        size="sm"
+                        leftSection={<IconX size={16} />}
+                        onClick={() => {
+                          setSummaryValue(model.description || '')
+                          setIsEditingSummary(false)
+                        }}
+                        styles={{
+                          root: {
+                            fontSize: '14px',
+                          },
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="light"
+                        color="orange"
+                        size="sm"
+                        leftSection={<IconCheck size={16} />}
+                        onClick={() => {
+                          // TODO: Call API to update model description
+                          setIsEditingSummary(false)
+                        }}
+                        styles={{
+                          root: {
+                            fontSize: '14px',
+                          },
+                        }}
+                      >
+                        Save
+                      </Button>
+                    </Group>
+                  </>
+                ) : (
+                  <Text size="15px" c={summaryValue ? 'dark' : 'dimmed'}>
+                    {summaryValue || 'No description provided. Click Edit to add one.'}
+                  </Text>
+                )}
               </Card>
 
               {/* Model Details Grid */}
@@ -341,7 +438,7 @@ export function ModelDetailPage() {
                             }
                           }}
                         >
-                          {model.dataset_id || 'Not linked'}
+                          {dataset?.name || model.dataset_id || 'Not linked'}
                         </Text>
                         {model.dataset_id && (
                           <ActionIcon
@@ -673,8 +770,8 @@ print(response.json())`}
             </Card>
           </Tabs.Panel>
 
-          {/* Build Logs Tab */}
-          <Tabs.Panel value="logs" pt={24} pb={32}>
+          {/* Training History Tab */}
+          <Tabs.Panel value="history" pt={24} pb={32}>
             <Card
               shadow="none"
               padding={24}
@@ -686,44 +783,203 @@ print(response.json())`}
               }}
             >
               <Group justify="space-between" mb={16}>
-                <Text size="16px" fw={600}>
-                  Build Logs
-                </Text>
+                <Group gap={8}>
+                  <IconHistory size={20} color={COLORS.GRAY_700} />
+                  <Text size="16px" fw={600}>
+                    Training History
+                  </Text>
+                </Group>
                 <Button variant="subtle" size="sm" color="gray">
                   Refresh
                 </Button>
               </Group>
-              <Code
-                block
-                style={{
-                  fontSize: '13px',
-                  padding: '16px',
-                  backgroundColor: '#1F2937',
-                  color: '#F9FAFB',
-                  minHeight: 300,
-                  maxHeight: 500,
-                  overflow: 'auto',
+              <Table
+                horizontalSpacing="lg"
+                verticalSpacing="md"
+                styles={{
+                  th: {
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: '#6B7280',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    borderBottom: '1px solid #E5E7EB',
+                    paddingTop: 12,
+                    paddingBottom: 12,
+                    backgroundColor: '#F9FAFB',
+                  },
+                  td: {
+                    fontSize: '14px',
+                    borderBottom: '1px solid #F3F4F6',
+                    paddingTop: 12,
+                    paddingBottom: 12,
+                  },
+                  tr: {
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s ease',
+                    '&:hover': {
+                      backgroundColor: '#F9FAFB',
+                    },
+                  },
                 }}
               >
-                {`[2025-01-15 10:30:45] Starting model training...
-[2025-01-15 10:30:46] Loading dataset: ${model.dataset_id || 'dataset_123'}
-[2025-01-15 10:30:48] Dataset loaded successfully (1000 samples)
-[2025-01-15 10:30:50] Initializing ${model.framework} model...
-[2025-01-15 10:30:52] Model initialized with task: ${model.task}
-[2025-01-15 10:31:00] Epoch 1/10 - Loss: 0.5234, Accuracy: 78.3%
-[2025-01-15 10:31:15] Epoch 2/10 - Loss: 0.4123, Accuracy: 82.1%
-[2025-01-15 10:31:30] Epoch 3/10 - Loss: 0.3456, Accuracy: 85.7%
-[2025-01-15 10:31:45] Epoch 4/10 - Loss: 0.2987, Accuracy: 87.9%
-[2025-01-15 10:32:00] Epoch 5/10 - Loss: 0.2654, Accuracy: 89.2%
-[2025-01-15 10:32:15] Epoch 6/10 - Loss: 0.2412, Accuracy: 90.3%
-[2025-01-15 10:32:30] Epoch 7/10 - Loss: 0.2245, Accuracy: 91.1%
-[2025-01-15 10:32:45] Epoch 8/10 - Loss: 0.2123, Accuracy: 91.6%
-[2025-01-15 10:33:00] Epoch 9/10 - Loss: 0.2034, Accuracy: 92.0%
-[2025-01-15 10:33:15] Epoch 10/10 - Loss: 0.1967, Accuracy: ${model.accuracy?.toFixed(1) || '92.4'}%
-[2025-01-15 10:33:20] Training completed successfully!
-[2025-01-15 10:33:25] Saving model to: ${model.model_path || './models/model_' + model.id}
-[2025-01-15 10:33:30] Model saved successfully!`}
-              </Code>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>RUN ID</Table.Th>
+                    <Table.Th>STATUS</Table.Th>
+                    <Table.Th>DURATION</Table.Th>
+                    <Table.Th>FINAL LOSS</Table.Th>
+                    <Table.Th>FINAL ACCURACY</Table.Th>
+                    <Table.Th>DATASET</Table.Th>
+                    <Table.Th>STARTED</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {/* Mock Training Run 1 - Completed */}
+                  <Table.Tr onClick={() => navigate(`/models/${model.id}/training?run=run_003`)}>
+                    <Table.Td>
+                      <Code style={{ fontSize: '13px' }}>run_003</Code>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={8}>
+                        <IconCircleCheck size={16} color={COLORS.SUCCESS} />
+                        <Badge variant="light" color="green" size="sm">
+                          Completed
+                        </Badge>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={6}>
+                        <IconClock size={14} color="#6B7280" />
+                        <Text size="14px">45m 32s</Text>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="14px" fw={500}>
+                        0.1967
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="14px" fw={600} c={COLORS.SUCCESS}>
+                        {model.accuracy?.toFixed(2) || '92.4'}%
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text
+                        size="14px"
+                        style={{ color: COLORS.PRIMARY, cursor: 'pointer' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (model.dataset_id) {
+                            navigate(`/datasets/${model.dataset_id}`)
+                          }
+                        }}
+                      >
+                        {dataset?.name || model.dataset_id || 'N/A'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="14px">Jan 15, 2025 10:30 AM</Text>
+                    </Table.Td>
+                  </Table.Tr>
+
+                  {/* Mock Training Run 2 - Failed */}
+                  <Table.Tr onClick={() => navigate(`/models/${model.id}/training?run=run_002`)}>
+                    <Table.Td>
+                      <Code style={{ fontSize: '13px' }}>run_002</Code>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={8}>
+                        <IconCircleX size={16} color={COLORS.ERROR} />
+                        <Badge variant="light" color="red" size="sm">
+                          Failed
+                        </Badge>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={6}>
+                        <IconClock size={14} color="#6B7280" />
+                        <Text size="14px">12m 18s</Text>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="14px" fw={500} c="dimmed">
+                        N/A
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="14px" fw={500} c="dimmed">
+                        N/A
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text
+                        size="14px"
+                        style={{ color: COLORS.PRIMARY, cursor: 'pointer' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (model.dataset_id) {
+                            navigate(`/datasets/${model.dataset_id}`)
+                          }
+                        }}
+                      >
+                        {dataset?.name || model.dataset_id || 'N/A'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="14px">Jan 14, 2025 3:45 PM</Text>
+                    </Table.Td>
+                  </Table.Tr>
+
+                  {/* Mock Training Run 3 - Stopped */}
+                  <Table.Tr onClick={() => navigate(`/models/${model.id}/training?run=run_001`)}>
+                    <Table.Td>
+                      <Code style={{ fontSize: '13px' }}>run_001</Code>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={8}>
+                        <IconCircleMinus size={16} color={COLORS.WARNING} />
+                        <Badge variant="light" color="orange" size="sm">
+                          Stopped
+                        </Badge>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={6}>
+                        <IconClock size={14} color="#6B7280" />
+                        <Text size="14px">8m 42s</Text>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="14px" fw={500}>
+                        0.3456
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="14px" fw={500}>
+                        85.7%
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text
+                        size="14px"
+                        style={{ color: COLORS.PRIMARY, cursor: 'pointer' }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (model.dataset_id) {
+                            navigate(`/datasets/${model.dataset_id}`)
+                          }
+                        }}
+                      >
+                        {dataset?.name || model.dataset_id || 'N/A'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="14px">Jan 13, 2025 9:20 AM</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                </Table.Tbody>
+              </Table>
             </Card>
           </Tabs.Panel>
         </Tabs>
