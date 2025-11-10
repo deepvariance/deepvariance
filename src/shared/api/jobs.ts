@@ -23,13 +23,18 @@ export interface TrainingJob {
   total_iterations: number
   current_accuracy?: number
   best_accuracy?: number
+  current_loss?: number // Current training loss
+  best_loss?: number // Best (lowest) loss achieved
+  precision?: number // Precision metric
+  recall?: number // Recall metric
+  f1_score?: number // F1-Score metric
   hyperparameters: HyperparametersConfig
   created_at: string
   started_at?: string
   completed_at?: string
   error_message?: string
-  elapsed_time?: string  // Human-readable elapsed time (e.g., "2h 15m")
-  estimated_remaining?: string  // Human-readable estimated time (e.g., "45m 32s")
+  elapsed_time?: string // Human-readable elapsed time (e.g., "2h 15m")
+  estimated_remaining?: string // Human-readable estimated time (e.g., "45m 32s")
 }
 
 export interface TrainingJobCreate {
@@ -46,7 +51,9 @@ export interface JobsFilters {
 /**
  * Fetch all training jobs with optional filters
  */
-export const getJobs = async (filters?: JobsFilters): Promise<TrainingJob[]> => {
+export const getJobs = async (
+  filters?: JobsFilters
+): Promise<TrainingJob[]> => {
   const { data } = await apiClient.get<TrainingJob[]>('/jobs', {
     params: filters,
   })

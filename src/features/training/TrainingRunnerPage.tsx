@@ -1,41 +1,46 @@
-import { useState } from 'react'
 import {
-  Box,
-  Stack,
-  Group,
-  Title,
-  Text,
+  useCancelJob,
+  useJobByModelId,
+  useJobLogs,
+} from '@/shared/hooks/useJobs'
+import { useModel } from '@/shared/hooks/useModels'
+import { useDataset } from '@/shared/hooks/useDatasets'
+import {
+  ActionIcon,
+  Alert,
   Badge,
+  Box,
   Button,
   Card,
-  Progress,
-  Tabs,
-  SimpleGrid,
+  Center,
   Code,
-  ScrollArea,
   Divider,
-  ActionIcon,
+  Group,
+  Loader,
+  Progress,
+  ScrollArea,
+  SimpleGrid,
+  Stack,
+  Tabs,
+  Text,
+  Title,
   Tooltip,
 } from '@mantine/core'
-import {
-  IconArrowLeft,
-  IconPlayerPause,
-  IconPlayerStop,
-  IconDownload,
-  IconRefresh,
-  IconActivity,
-  IconChartLine,
-  IconTerminal,
-  IconSettings,
-  IconDatabase,
-} from '@tabler/icons-react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ROUTES } from '@/shared/config/constants'
-import { useModel } from '@/shared/hooks/useModels'
-import { useJobByModelId, useJobLogs, useCancelJob } from '@/shared/hooks/useJobs'
-import { Loader, Center, Alert } from '@mantine/core'
-import { IconAlertCircle } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
+import {
+  IconActivity,
+  IconAlertCircle,
+  IconArrowLeft,
+  IconChartLine,
+  IconDatabase,
+  IconDownload,
+  IconPlayerStop,
+  IconRefresh,
+  IconSettings,
+  IconTerminal,
+} from '@tabler/icons-react'
+import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 
 // Mock data - will be replaced with real API calls
 const mockTrainingData = {
@@ -60,21 +65,12 @@ const mockTrainingData = {
   datasetSize: '125,000 samples',
 }
 
-const mockLogs = [
-  { time: '14:32:15', level: 'INFO', message: 'Iteration 15/50 started' },
-  { time: '14:32:16', level: 'INFO', message: 'Batch 1/128 - loss: 0.245, accuracy: 0.938' },
-  { time: '14:32:17', level: 'INFO', message: 'Batch 2/128 - loss: 0.231, accuracy: 0.941' },
-  { time: '14:32:18', level: 'INFO', message: 'Batch 3/128 - loss: 0.238, accuracy: 0.945' },
-  { time: '14:32:19', level: 'INFO', message: 'Batch 4/128 - loss: 0.229, accuracy: 0.943' },
-  { time: '14:32:20', level: 'WARNING', message: 'Learning rate adjusted: 0.001 -> 0.0008' },
-  { time: '14:32:21', level: 'INFO', message: 'Batch 5/128 - loss: 0.227, accuracy: 0.946' },
-  { time: '14:32:22', level: 'INFO', message: 'Batch 6/128 - loss: 0.233, accuracy: 0.944' },
-]
-
-const mockSystemResources = {
-  cpu: { usage: 45, temp: 51 },
-  gpu: { usage: 68, temp: 71, memory: '8.7 / 16 GB' },
-  ram: { usage: 28, used: '16.2 / 16 GB' },
+// Log type definition
+interface TrainingLog {
+  time?: string
+  timestamp?: string
+  level: string
+  message: string
 }
 
 export function TrainingRunnerPage() {
@@ -84,40 +80,62 @@ export function TrainingRunnerPage() {
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   // Fetch model and job data
-  const { data: model, isLoading: modelLoading, error: modelError } = useModel(id!)
-  const { data: job, isLoading: jobLoading, error: jobError } = useJobByModelId(id)
+  const {
+    data: model,
+    isLoading: modelLoading,
+    error: modelError,
+  } = useModel(id!)
+  const {
+    data: job,
+    isLoading: jobLoading,
+    error: jobError,
+  } = useJobByModelId(id)
   const { data: logsData } = useJobLogs(job?.id || '')
+  const { data: dataset } = useDataset(job?.dataset_id || '')
   const cancelJobMutation = useCancelJob()
 
   const isLoading = modelLoading || jobLoading
   const error = modelError || jobError
 
-  // Use real data if available, otherwise mock data
-  const data = model && job ? {
-    modelName: model.name,
-    task: model.task,
-    status: model.status,
-    currentIteration: job.current_iteration || 0,
-    totalIterations: job.total_iterations || 0,
-    progress: job.total_iterations ? (job.current_iteration / job.total_iterations) * 100 : 0,
-    currentLoss: 0, // Not available in current API
-    lossDelta: 0, // Not available in current API
-    accuracy: job.current_accuracy ? job.current_accuracy * 100 : 0,
-    validationAccuracy: job.best_accuracy ? job.best_accuracy * 100 : 0,
-    precision: 0, // Not available in current API
-    recall: 0, // Not available in current API
-    f1Score: 0, // Not available in current API
-    learningRate: job.hyperparameters?.learning_rate || 0.001,
-    batchSize: job.hyperparameters?.batch_size || 32,
-    elapsedTime: job.elapsed_time || '0s',
-    estimatedRemaining: job.estimated_remaining || '0s',
-    datasetName: model.tags.find(tag => tag !== model.task) || 'Unknown',
-    datasetSize: '0 samples', // Not available in current API
-  } : mockTrainingData
+  // Use real data from API
+  const data =
+    model && job
+      ? {
+          modelName: model.name,
+          task: model.task,
+          status: model.status,
+          currentIteration: job.current_iteration ?? 0,
+          totalIterations: job.total_iterations ?? 0,
+          progress: job.progress ?? 0,
+          currentLoss: job.current_loss ?? null,
+          bestLoss: job.best_loss ?? null,
+          accuracy: job.current_accuracy ? job.current_accuracy * 100 : null,
+          validationAccuracy: job.best_accuracy
+            ? job.best_accuracy * 100
+            : null,
+          precision: job.precision ? job.precision * 100 : null,
+          recall: job.recall ? job.recall * 100 : null,
+          f1Score: job.f1_score ? job.f1_score * 100 : null,
+          learningRate: job.hyperparameters?.learning_rate ?? 0.001,
+          batchSize: job.hyperparameters?.batch_size ?? 32,
+          epochs: job.total_iterations ?? 10,
+          optimizer: job.hyperparameters?.optimizer ?? 'Adam',
+          dropoutRate: job.hyperparameters?.dropout_rate ?? 0.2,
+          maxIterations: job.hyperparameters?.max_iterations ?? 10,
+          targetAccuracy: job.hyperparameters?.target_accuracy ?? 1.0,
+          elapsedTime: job.elapsed_time || '0s',
+          estimatedRemaining: job.estimated_remaining || '0s',
+          datasetName: model.tags.find(tag => tag !== model.task) || 'Unknown',
+          datasetSize: dataset?.size ? `${dataset.size.toLocaleString()} samples` : 'N/A',
+          hasRealData: true,
+        }
+      : {
+          ...mockTrainingData,
+          hasRealData: false,
+        }
 
-  // Parse logs data
-  const logs = logsData?.logs || mockLogs
-  const resources = mockSystemResources
+  // Parse logs data - the API returns { logs: [...] }
+  const logs: TrainingLog[] = logsData?.logs || []
 
   // Handle cancel job
   const handleCancelJob = async () => {
@@ -133,7 +151,8 @@ export function TrainingRunnerPage() {
     } catch (error) {
       notifications.show({
         title: 'Cancel Failed',
-        message: error instanceof Error ? error.message : 'Failed to cancel job',
+        message:
+          error instanceof Error ? error.message : 'Failed to cancel job',
         color: 'red',
       })
     }
@@ -161,7 +180,9 @@ export function TrainingRunnerPage() {
             color="red"
             variant="light"
           >
-            {error instanceof Error ? error.message : 'Failed to fetch training data'}
+            {error instanceof Error
+              ? error.message
+              : 'Failed to fetch training data'}
           </Alert>
           <Button
             mt={16}
@@ -226,14 +247,17 @@ export function TrainingRunnerPage() {
             </Group>
             <Group gap={6}>
               <Text size="15px" c="dimmed">
-                {data.task.charAt(0).toUpperCase() + data.task.slice(1)} • Dataset:
+                {data.task.charAt(0).toUpperCase() + data.task.slice(1)} •
+                Dataset:
               </Text>
               <Text
                 size="15px"
                 c="blue"
                 fw={500}
                 style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                onClick={() => model?.dataset_id && navigate(`/datasets/${model.dataset_id}`)}
+                onClick={() =>
+                  model?.dataset_id && navigate(`/datasets/${model.dataset_id}`)
+                }
               >
                 {data.datasetName}
               </Text>
@@ -242,7 +266,9 @@ export function TrainingRunnerPage() {
 
           {/* Action Buttons */}
           <Group gap={12}>
-            <Tooltip label={autoRefresh ? 'Pause auto-refresh' : 'Resume auto-refresh'}>
+            <Tooltip
+              label={autoRefresh ? 'Pause auto-refresh' : 'Resume auto-refresh'}
+            >
               <ActionIcon
                 size="lg"
                 variant={autoRefresh ? 'filled' : 'light'}
@@ -270,64 +296,114 @@ export function TrainingRunnerPage() {
         {/* Status Cards */}
         <SimpleGrid cols={4} spacing={16}>
           {/* Progress Card */}
-          <Card shadow="sm" padding="lg" radius={12} withBorder style={{ borderColor: '#E5E7EB' }}>
+          <Card
+            shadow="sm"
+            padding="lg"
+            radius={12}
+            withBorder
+            style={{ borderColor: '#E5E7EB' }}
+          >
             <Stack gap={8}>
               <Text size="13px" c="dimmed" fw={500}>
                 Progress
               </Text>
               <Text size="28px" fw={700}>
-                Iteration {data.currentIteration}/{data.totalIterations}
+                {data.currentIteration}/{data.totalIterations}
               </Text>
-              <Progress value={data.progress} size="md" color="blue" animated />
+              <Progress
+                value={data.progress}
+                size="md"
+                color="blue"
+                animated={job?.status === 'running'}
+              />
               <Text size="12px" c="dimmed">
                 {data.progress.toFixed(1)}% Complete
               </Text>
             </Stack>
           </Card>
 
-          {/* Loss Card */}
-          <Card shadow="sm" padding="lg" radius={12} withBorder style={{ borderColor: '#E5E7EB' }}>
+          {/* Current Accuracy Card */}
+          <Card
+            shadow="sm"
+            padding="lg"
+            radius={12}
+            withBorder
+            style={{ borderColor: '#E5E7EB' }}
+          >
             <Stack gap={8}>
               <Text size="13px" c="dimmed" fw={500}>
-                Training Loss
+                Current Accuracy
               </Text>
-              <Group gap={8} align="baseline">
-                <Text size="28px" fw={700}>
-                  {data.currentLoss.toFixed(3)}
-                </Text>
-                <Badge
-                  variant="light"
-                  color={data.lossDelta < 0 ? 'green' : 'red'}
-                  size="sm"
-                  styles={{ root: { fontSize: '11px' } }}
-                >
-                  {data.lossDelta > 0 ? '+' : ''}{data.lossDelta.toFixed(3)}
-                </Badge>
-              </Group>
-              <Text size="12px" c="dimmed">
-                vs. last iteration
-              </Text>
+              {data.accuracy !== null ? (
+                <>
+                  <Text size="28px" fw={700} c="blue">
+                    {data.accuracy.toFixed(2)}%
+                  </Text>
+                  <Progress value={data.accuracy ?? 0} size="md" color="blue" />
+                  <Text size="12px" c="dimmed">
+                    Latest iteration
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text size="28px" fw={700} c="dimmed">
+                    --
+                  </Text>
+                  <Text size="12px" c="dimmed">
+                    No data yet
+                  </Text>
+                </>
+              )}
             </Stack>
           </Card>
 
-          {/* Accuracy Card */}
-          <Card shadow="sm" padding="lg" radius={12} withBorder style={{ borderColor: '#E5E7EB' }}>
+          {/* Best Accuracy Card */}
+          <Card
+            shadow="sm"
+            padding="lg"
+            radius={12}
+            withBorder
+            style={{ borderColor: '#E5E7EB' }}
+          >
             <Stack gap={8}>
               <Text size="13px" c="dimmed" fw={500}>
-                Accuracy
+                Best Accuracy
               </Text>
-              <Text size="28px" fw={700} c="green">
-                {data.accuracy}%
-              </Text>
-              <Progress value={data.accuracy} size="md" color="green" />
-              <Text size="12px" c="dimmed">
-                Validation: {data.validationAccuracy}%
-              </Text>
+              {data.validationAccuracy !== null ? (
+                <>
+                  <Text size="28px" fw={700} c="green">
+                    {data.validationAccuracy.toFixed(2)}%
+                  </Text>
+                  <Progress
+                    value={data.validationAccuracy ?? 0}
+                    size="md"
+                    color="green"
+                  />
+                  <Text size="12px" c="dimmed">
+                    All iterations
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text size="28px" fw={700} c="dimmed">
+                    --
+                  </Text>
+                  <Text size="12px" c="dimmed">
+                    No data yet
+                  </Text>
+                </>
+              )}
             </Stack>
           </Card>
 
           {/* Time Card */}
-          <Card shadow="sm" padding="lg" radius={12} withBorder style={{ borderColor: '#E5E7EB' }}>
+          <Card
+            shadow="sm"
+            padding="lg"
+            radius={12}
+            withBorder
+            style={{ borderColor: '#E5E7EB' }}
+          >
             <Stack gap={8}>
               <Text size="13px" c="dimmed" fw={500}>
                 Time
@@ -348,7 +424,13 @@ export function TrainingRunnerPage() {
         <Group align="flex-start" gap={24}>
           {/* Main Tabs Area */}
           <Box style={{ flex: 1 }}>
-            <Card shadow="sm" padding={0} radius={12} withBorder style={{ borderColor: '#E5E7EB' }}>
+            <Card
+              shadow="sm"
+              padding={0}
+              radius={12}
+              withBorder
+              style={{ borderColor: '#E5E7EB' }}
+            >
               <Tabs value={activeTab} onChange={setActiveTab}>
                 <Tabs.List
                   style={{
@@ -450,7 +532,8 @@ export function TrainingRunnerPage() {
                         }}
                       >
                         <Text c="dimmed" size="15px">
-                          Live chart: Loss & Accuracy over iterations (Chart visualization will be added)
+                          Live chart: Loss & Accuracy over iterations (Chart
+                          visualization will be added)
                         </Text>
                       </Box>
                     </div>
@@ -461,39 +544,126 @@ export function TrainingRunnerPage() {
                         Performance Metrics
                       </Text>
                       <SimpleGrid cols={4} spacing={16}>
-                        <Card padding="md" radius={8} style={{ backgroundColor: '#F9FAFB' }}>
+                        <Card
+                          padding="md"
+                          radius={8}
+                          style={{ backgroundColor: '#F9FAFB' }}
+                        >
                           <Text size="13px" c="dimmed" mb={4}>
-                            Accuracy
-                          </Text>
-                          <Text size="24px" fw={700} c="green">
-                            {data.accuracy}%
-                          </Text>
-                        </Card>
-                        <Card padding="md" radius={8} style={{ backgroundColor: '#F9FAFB' }}>
-                          <Text size="13px" c="dimmed" mb={4}>
-                            Precision
+                            Current Accuracy
                           </Text>
                           <Text size="24px" fw={700} c="blue">
-                            {data.precision}%
+                            {data.accuracy !== null
+                              ? `${data.accuracy.toFixed(2)}%`
+                              : 'N/A'}
                           </Text>
                         </Card>
-                        <Card padding="md" radius={8} style={{ backgroundColor: '#F9FAFB' }}>
+                        <Card
+                          padding="md"
+                          radius={8}
+                          style={{ backgroundColor: '#F9FAFB' }}
+                        >
                           <Text size="13px" c="dimmed" mb={4}>
-                            Recall
+                            Best Accuracy
                           </Text>
-                          <Text size="24px" fw={700} c="purple">
-                            {data.recall}%
+                          <Text size="24px" fw={700} c="green">
+                            {data.validationAccuracy !== null
+                              ? `${data.validationAccuracy.toFixed(2)}%`
+                              : 'N/A'}
                           </Text>
                         </Card>
-                        <Card padding="md" radius={8} style={{ backgroundColor: '#F9FAFB' }}>
+                        <Card
+                          padding="md"
+                          radius={8}
+                          style={{ backgroundColor: '#F9FAFB' }}
+                        >
                           <Text size="13px" c="dimmed" mb={4}>
-                            F1-Score
+                            Current Loss
                           </Text>
                           <Text size="24px" fw={700} c="orange">
-                            {data.f1Score}%
+                            {data.currentLoss !== null
+                              ? data.currentLoss.toFixed(4)
+                              : 'N/A'}
+                          </Text>
+                        </Card>
+                        <Card
+                          padding="md"
+                          radius={8}
+                          style={{ backgroundColor: '#F9FAFB' }}
+                        >
+                          <Text size="13px" c="dimmed" mb={4}>
+                            Best Loss
+                          </Text>
+                          <Text size="24px" fw={700} c="teal">
+                            {data.bestLoss !== null &&
+                            data.bestLoss !== undefined
+                              ? data.bestLoss.toFixed(4)
+                              : 'N/A'}
                           </Text>
                         </Card>
                       </SimpleGrid>
+
+                      <Text size="14px" fw={600} mt={24} mb={12}>
+                        Classification Metrics
+                      </Text>
+                      <SimpleGrid cols={3} spacing={16}>
+                        <Card
+                          padding="md"
+                          radius={8}
+                          style={{ backgroundColor: '#F9FAFB' }}
+                        >
+                          <Text size="13px" c="dimmed" mb={4}>
+                            Precision
+                          </Text>
+                          <Text size="24px" fw={700} c="violet">
+                            {data.precision !== null
+                              ? `${data.precision.toFixed(2)}%`
+                              : 'N/A'}
+                          </Text>
+                        </Card>
+                        <Card
+                          padding="md"
+                          radius={8}
+                          style={{ backgroundColor: '#F9FAFB' }}
+                        >
+                          <Text size="13px" c="dimmed" mb={4}>
+                            Recall
+                          </Text>
+                          <Text size="24px" fw={700} c="grape">
+                            {data.recall !== null
+                              ? `${data.recall.toFixed(2)}%`
+                              : 'N/A'}
+                          </Text>
+                        </Card>
+                        <Card
+                          padding="md"
+                          radius={8}
+                          style={{ backgroundColor: '#F9FAFB' }}
+                        >
+                          <Text size="13px" c="dimmed" mb={4}>
+                            F1-Score
+                          </Text>
+                          <Text size="24px" fw={700} c="indigo">
+                            {data.f1Score !== null
+                              ? `${data.f1Score.toFixed(2)}%`
+                              : 'N/A'}
+                          </Text>
+                        </Card>
+                      </SimpleGrid>
+
+                      {data.precision === null &&
+                        data.recall === null &&
+                        data.f1Score === null && (
+                          <Text
+                            size="13px"
+                            c="dimmed"
+                            mt={12}
+                            style={{ fontStyle: 'italic' }}
+                          >
+                            Classification metrics will appear here once
+                            training begins.
+                          </Text>
+                        )}
                     </div>
                   </Stack>
                 </Tabs.Panel>
@@ -517,7 +687,8 @@ export function TrainingRunnerPage() {
                       }}
                     >
                       <Text c="dimmed" size="15px">
-                        Detailed metrics visualizations (Confusion Matrix, ROC Curve, etc.)
+                        Detailed metrics visualizations (Confusion Matrix, ROC
+                        Curve, etc.)
                       </Text>
                     </Box>
                   </Stack>
@@ -528,7 +699,8 @@ export function TrainingRunnerPage() {
                   <Box p={16} style={{ borderBottom: '1px solid #E5E7EB' }}>
                     <Group justify="space-between">
                       <Text size="14px" fw={600}>
-                        Training Logs
+                        Training Logs{' '}
+                        {logs.length > 0 && `(${logs.length} lines)`}
                       </Text>
                       <Group gap={8}>
                         <Button
@@ -536,6 +708,7 @@ export function TrainingRunnerPage() {
                           variant="light"
                           color="gray"
                           leftSection={<IconDownload size={14} />}
+                          disabled={logs.length === 0}
                         >
                           Download
                         </Button>
@@ -544,27 +717,50 @@ export function TrainingRunnerPage() {
                   </Box>
                   <ScrollArea h={500} style={{ backgroundColor: '#1e1e1e' }}>
                     <Box p={16}>
-                      {logs.map((log, index) => (
-                        <Group
-                          key={index}
-                          gap={12}
-                          mb={4}
-                          style={{ fontFamily: 'monospace', fontSize: '13px' }}
-                        >
-                          <Text c="gray.5" style={{ minWidth: 80 }}>
-                            {log.time}
-                          </Text>
-                          <Badge
-                            size="xs"
-                            color={log.level === 'WARNING' ? 'yellow' : log.level === 'ERROR' ? 'red' : 'blue'}
-                            variant="light"
-                            style={{ minWidth: 60 }}
+                      {logs.length > 0 ? (
+                        logs.map((log: TrainingLog, index: number) => (
+                          <Group
+                            key={index}
+                            gap={12}
+                            mb={4}
+                            style={{
+                              fontFamily: 'monospace',
+                              fontSize: '13px',
+                            }}
                           >
-                            {log.level}
-                          </Badge>
-                          <Text c="gray.3">{log.message}</Text>
-                        </Group>
-                      ))}
+                            <Text c="gray.5" style={{ minWidth: 80 }}>
+                              {log.time || log.timestamp || ''}
+                            </Text>
+                            <Badge
+                              size="xs"
+                              color={
+                                log.level === 'WARNING'
+                                  ? 'yellow'
+                                  : log.level === 'ERROR'
+                                    ? 'red'
+                                    : log.level === 'INFO'
+                                      ? 'blue'
+                                      : 'gray'
+                              }
+                              variant="light"
+                              style={{ minWidth: 60 }}
+                            >
+                              {log.level}
+                            </Badge>
+                            <Text c="gray.3">{log.message}</Text>
+                          </Group>
+                        ))
+                      ) : (
+                        <Center py={40}>
+                          <Text c="gray.5" size="14px">
+                            {job?.status === 'pending'
+                              ? 'Waiting for training to start...'
+                              : job?.status === 'running'
+                                ? 'Loading logs...'
+                                : 'No logs available for this training run'}
+                          </Text>
+                        </Center>
+                      )}
                     </Box>
                   </ScrollArea>
                 </Tabs.Panel>
@@ -581,7 +777,7 @@ export function TrainingRunnerPage() {
                           Learning Rate
                         </Text>
                         <Code block p={8} style={{ fontSize: '14px' }}>
-                          {job?.hyperparameters?.learning_rate ?? data.learningRate}
+                          {data.learningRate}
                         </Code>
                       </Box>
                       <Box>
@@ -589,15 +785,15 @@ export function TrainingRunnerPage() {
                           Batch Size
                         </Text>
                         <Code block p={8} style={{ fontSize: '14px' }}>
-                          {job?.hyperparameters?.batch_size ?? data.batchSize}
+                          {data.batchSize}
                         </Code>
                       </Box>
                       <Box>
                         <Text size="13px" c="dimmed" mb={4}>
-                          Max Iterations
+                          Epochs
                         </Text>
                         <Code block p={8} style={{ fontSize: '14px' }}>
-                          {job?.hyperparameters?.max_iterations ?? data.totalIterations}
+                          {data.epochs}
                         </Code>
                       </Box>
                       <Box>
@@ -605,29 +801,48 @@ export function TrainingRunnerPage() {
                           Optimizer
                         </Text>
                         <Code block p={8} style={{ fontSize: '14px' }}>
-                          {job?.hyperparameters?.optimizer ?? 'Adam'}
+                          {data.optimizer}
                         </Code>
                       </Box>
-                      {job?.hyperparameters?.dropout_rate !== undefined && (
-                        <Box>
-                          <Text size="13px" c="dimmed" mb={4}>
-                            Dropout Rate
-                          </Text>
-                          <Code block p={8} style={{ fontSize: '14px' }}>
-                            {job.hyperparameters.dropout_rate}
-                          </Code>
-                        </Box>
-                      )}
-                      {job?.hyperparameters?.target_accuracy !== undefined && (
-                        <Box>
-                          <Text size="13px" c="dimmed" mb={4}>
-                            Target Accuracy
-                          </Text>
-                          <Code block p={8} style={{ fontSize: '14px' }}>
-                            {job.hyperparameters.target_accuracy}
-                          </Code>
-                        </Box>
-                      )}
+                      <Box>
+                        <Text size="13px" c="dimmed" mb={4}>
+                          Dropout Rate
+                        </Text>
+                        <Code block p={8} style={{ fontSize: '14px' }}>
+                          {data.dropoutRate}
+                        </Code>
+                      </Box>
+                      <Box>
+                        <Text size="13px" c="dimmed" mb={4}>
+                          Max Iterations
+                        </Text>
+                        <Code block p={8} style={{ fontSize: '14px' }}>
+                          {data.maxIterations}
+                        </Code>
+                      </Box>
+                      <Box>
+                        <Text size="13px" c="dimmed" mb={4}>
+                          Target Accuracy
+                        </Text>
+                        <Code block p={8} style={{ fontSize: '14px' }}>
+                          {data.targetAccuracy}
+                        </Code>
+                      </Box>
+                      <Box>
+                        <Text size="13px" c="dimmed" mb={4}>
+                          Task
+                        </Text>
+                        <Code
+                          block
+                          p={8}
+                          style={{
+                            fontSize: '14px',
+                            textTransform: 'capitalize',
+                          }}
+                        >
+                          {data.task}
+                        </Code>
+                      </Box>
                     </SimpleGrid>
                   </Stack>
                 </Tabs.Panel>
@@ -647,13 +862,16 @@ export function TrainingRunnerPage() {
                           cursor: model?.dataset_id ? 'pointer' : 'default',
                           transition: 'background-color 0.2s ease',
                         }}
-                        onClick={() => model?.dataset_id && navigate(`/datasets/${model.dataset_id}`)}
-                        onMouseEnter={(e) => {
+                        onClick={() =>
+                          model?.dataset_id &&
+                          navigate(`/datasets/${model.dataset_id}`)
+                        }
+                        onMouseEnter={e => {
                           if (model?.dataset_id) {
                             e.currentTarget.style.backgroundColor = '#F3F4F6'
                           }
                         }}
-                        onMouseLeave={(e) => {
+                        onMouseLeave={e => {
                           e.currentTarget.style.backgroundColor = '#F9FAFB'
                         }}
                       >
