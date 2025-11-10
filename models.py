@@ -2,17 +2,20 @@
 Pydantic Models and Schemas
 Data validation and serialization models for the API
 """
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List, Literal
 from datetime import datetime
 from enum import Enum
+from typing import List, Literal, Optional
+
+from pydantic import BaseModel, Field, validator
 
 # ============= Enums =============
+
 
 class DatasetDomain(str, Enum):
     """Dataset domain types"""
     TABULAR = "tabular"
     VISION = "vision"
+
 
 class DatasetReadiness(str, Enum):
     """Dataset readiness status"""
@@ -22,11 +25,13 @@ class DatasetReadiness(str, Enum):
     DRAFT = "draft"
     ERROR = "error"
 
+
 class StorageType(str, Enum):
     """Storage provider types"""
     LOCAL = "local"
     GCS = "gcs"
     S3 = "s3"
+
 
 class ModelTask(str, Enum):
     """Model task types"""
@@ -34,6 +39,7 @@ class ModelTask(str, Enum):
     REGRESSION = "regression"
     CLUSTERING = "clustering"
     DETECTION = "detection"
+
 
 class ModelStatus(str, Enum):
     """Model status"""
@@ -43,6 +49,7 @@ class ModelStatus(str, Enum):
     QUEUED = "queued"
     DRAFT = "draft"
     FAILED = "failed"
+
 
 class JobStatus(str, Enum):
     """Training job status"""
@@ -54,19 +61,23 @@ class JobStatus(str, Enum):
 
 # ============= Dataset Schemas =============
 
+
 class DatasetBase(BaseModel):
     """Base dataset schema"""
     name: str = Field(..., min_length=1, max_length=255)
     domain: DatasetDomain
-    size: Optional[int] = Field(None, ge=0, description="Number of samples/rows")
+    size: Optional[int] = Field(
+        None, ge=0, description="Number of samples/rows")
     storage: StorageType = StorageType.LOCAL
     path: Optional[str] = Field(None, description="Path to dataset on storage")
     tags: List[str] = Field(default_factory=list)
     description: Optional[str] = None
 
+
 class DatasetCreate(DatasetBase):
     """Schema for creating a dataset"""
     pass
+
 
 class DatasetUpdate(BaseModel):
     """Schema for updating a dataset"""
@@ -74,6 +85,7 @@ class DatasetUpdate(BaseModel):
     tags: Optional[List[str]] = None
     description: Optional[str] = None
     readiness: Optional[DatasetReadiness] = None
+
 
 class DatasetResponse(DatasetBase):
     """Schema for dataset response"""
@@ -89,6 +101,7 @@ class DatasetResponse(DatasetBase):
 
 # ============= Model Schemas =============
 
+
 class TrainedModelBase(BaseModel):
     """Base trained model schema"""
     name: str = Field(..., min_length=1, max_length=255)
@@ -97,15 +110,18 @@ class TrainedModelBase(BaseModel):
     tags: List[str] = Field(default_factory=list)
     description: Optional[str] = None
 
+
 class TrainedModelCreate(TrainedModelBase):
     """Schema for creating a model (via training job)"""
     dataset_id: str
+
 
 class TrainedModelUpdate(BaseModel):
     """Schema for updating a model"""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     tags: Optional[List[str]] = None
     description: Optional[str] = None
+
 
 class TrainedModelResponse(TrainedModelBase):
     """Schema for model response"""
@@ -124,6 +140,7 @@ class TrainedModelResponse(TrainedModelBase):
 
 # ============= Training Job Schemas =============
 
+
 class HyperparametersConfig(BaseModel):
     """Hyperparameters configuration"""
     learning_rate: float = Field(1e-3, gt=0, le=1)
@@ -131,8 +148,10 @@ class HyperparametersConfig(BaseModel):
     optimizer: Literal["Adam", "SGD", "RMSprop"] = "Adam"
     dropout_rate: float = Field(0.2, ge=0.0, le=0.9)
     epochs: int = Field(3, ge=1, le=100)
-    max_iterations: int = Field(10, ge=1, le=50, description="Max agent iterations")
+    max_iterations: int = Field(
+        10, ge=1, le=50, description="Max agent iterations")
     target_accuracy: float = Field(1.0, ge=0.0, le=1.0)
+
 
 class TrainingJobCreate(BaseModel):
     """Schema for creating a training job"""
@@ -140,6 +159,7 @@ class TrainingJobCreate(BaseModel):
     model_name: Optional[str] = None
     hyperparameters: Optional[HyperparametersConfig] = None
     task: ModelTask = ModelTask.CLASSIFICATION
+
 
 class TrainingJobResponse(BaseModel):
     """Schema for training job response"""
@@ -152,16 +172,24 @@ class TrainingJobResponse(BaseModel):
     total_iterations: int = 10
     current_accuracy: Optional[float] = None
     best_accuracy: Optional[float] = None
+    current_loss: Optional[float] = None  # Current training loss
+    best_loss: Optional[float] = None  # Best (lowest) loss achieved
+    precision: Optional[float] = None  # Precision metric
+    recall: Optional[float] = None  # Recall metric
+    f1_score: Optional[float] = None  # F1-Score metric
     hyperparameters: Optional[HyperparametersConfig] = None
     created_at: datetime
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
-    elapsed_time: Optional[str] = None  # Human-readable elapsed time (e.g., "2h 15m")
-    estimated_remaining: Optional[str] = None  # Human-readable estimated time (e.g., "45m 32s")
+    # Human-readable elapsed time (e.g., "2h 15m")
+    elapsed_time: Optional[str] = None
+    # Human-readable estimated time (e.g., "45m 32s")
+    estimated_remaining: Optional[str] = None
 
     class Config:
         from_attributes = True
+
 
 class TrainingMetrics(BaseModel):
     """Training metrics"""
@@ -173,6 +201,7 @@ class TrainingMetrics(BaseModel):
     stability: float
 
 # ============= System Schemas =============
+
 
 class SystemMetrics(BaseModel):
     """System monitoring metrics"""
@@ -188,10 +217,12 @@ class SystemMetrics(BaseModel):
 
 # ============= Common Response Schemas =============
 
+
 class MessageResponse(BaseModel):
     """Generic message response"""
     message: str
     detail: Optional[str] = None
+
 
 class ErrorResponse(BaseModel):
     """Error response schema"""

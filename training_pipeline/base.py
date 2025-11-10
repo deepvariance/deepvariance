@@ -5,9 +5,9 @@ Defines the contract that all training strategies must implement
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, Callable, List
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 
 @dataclass
@@ -75,6 +75,10 @@ class ProgressUpdate:
     current_accuracy: Optional[float] = None
     best_accuracy: Optional[float] = None
     current_loss: Optional[float] = None
+    best_loss: Optional[float] = None
+    precision: Optional[float] = None
+    recall: Optional[float] = None
+    f1_score: Optional[float] = None
     status: str = 'training'  # training, completed, failed
     message: Optional[str] = None
     timestamp: datetime = field(default_factory=datetime.now)
@@ -88,6 +92,10 @@ class ProgressUpdate:
             'current_accuracy': self.current_accuracy,
             'best_accuracy': self.best_accuracy,
             'current_loss': self.current_loss,
+            'best_loss': self.best_loss,
+            'precision': self.precision,
+            'recall': self.recall,
+            'f1_score': self.f1_score,
             'status': self.status,
             'message': self.message,
             'timestamp': self.timestamp.isoformat(),

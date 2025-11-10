@@ -2,19 +2,19 @@
 SQLAlchemy ORM Models for PostgreSQL Database
 Database table definitions using SQLAlchemy ORM
 """
-from sqlalchemy import (
-    Column, String, Integer, BigInteger, Boolean, Text, DECIMAL,
-    TIMESTAMP, Date, ForeignKey, CheckConstraint, Index
-)
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
+import uuid
+
+from sqlalchemy import (DECIMAL, TIMESTAMP, BigInteger, Boolean,
+                        CheckConstraint, Column, Date, ForeignKey, Index,
+                        Integer, String, Text)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import uuid
 
 from db_config import Base
 
-
 # ============= DATASETS TABLE =============
+
 
 class Dataset(Base):
     __tablename__ = "datasets"
@@ -41,11 +41,13 @@ class Dataset(Base):
 
     # Metadata
     tags = Column(ARRAY(Text))
-    meta_data = Column('metadata', JSONB)  # Use 'meta_data' as attribute, 'metadata' as column name
+    # Use 'meta_data' as attribute, 'metadata' as column name
+    meta_data = Column('metadata', JSONB)
 
     # Timestamps
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
-    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True),
+                        server_default=func.now(), onupdate=func.now())
     last_modified = Column(Date)
     freshness = Column(Date)
 
@@ -55,10 +57,13 @@ class Dataset(Base):
 
     # Constraints
     __table_args__ = (
-        CheckConstraint('domain IN (\'vision\', \'tabular\')', name='valid_domain'),
-        CheckConstraint('readiness IN (\'draft\', \'processing\', \'ready\', \'failed\')', name='valid_readiness'),
+        CheckConstraint('domain IN (\'vision\', \'tabular\')',
+                        name='valid_domain'),
+        CheckConstraint(
+            'readiness IN (\'draft\', \'processing\', \'ready\', \'failed\')', name='valid_readiness'),
         CheckConstraint('total_samples >= 0', name='valid_samples'),
-        CheckConstraint('file_size IS NULL OR file_size > 0', name='valid_file_size'),
+        CheckConstraint('file_size IS NULL OR file_size > 0',
+                        name='valid_file_size'),
         Index('idx_datasets_domain', 'domain'),
         Index('idx_datasets_readiness', 'readiness'),
         Index('idx_datasets_name', 'name'),
@@ -91,7 +96,8 @@ class Model(Base):
     loss = Column(DECIMAL(10, 6))
 
     # Relationships
-    dataset_id = Column(UUID(as_uuid=True), ForeignKey('datasets.id', ondelete='SET NULL'))
+    dataset_id = Column(UUID(as_uuid=True), ForeignKey(
+        'datasets.id', ondelete='SET NULL'))
 
     # Storage
     model_path = Column(String(500))
@@ -103,20 +109,27 @@ class Model(Base):
 
     # Timestamps
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
-    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True),
+                        server_default=func.now(), onupdate=func.now())
     last_trained = Column(TIMESTAMP(timezone=True))
 
     # Relationships
     dataset = relationship("Dataset", back_populates="models")
-    training_runs = relationship("TrainingRun", back_populates="model", cascade="all, delete-orphan")
-    versions = relationship("ModelVersion", back_populates="model", cascade="all, delete-orphan")
+    training_runs = relationship(
+        "TrainingRun", back_populates="model", cascade="all, delete-orphan")
+    versions = relationship(
+        "ModelVersion", back_populates="model", cascade="all, delete-orphan")
 
     # Constraints
     __table_args__ = (
-        CheckConstraint('task IN (\'classification\', \'regression\', \'clustering\', \'detection\')', name='valid_task'),
-        CheckConstraint('framework IN (\'pytorch\', \'tensorflow\', \'sklearn\')', name='valid_framework'),
-        CheckConstraint('status IN (\'draft\', \'queued\', \'training\', \'ready\', \'active\', \'failed\')', name='valid_status'),
-        CheckConstraint('accuracy IS NULL OR (accuracy >= 0 AND accuracy <= 100)', name='valid_accuracy'),
+        CheckConstraint(
+            'task IN (\'classification\', \'regression\', \'clustering\', \'detection\')', name='valid_task'),
+        CheckConstraint(
+            'framework IN (\'pytorch\', \'tensorflow\', \'sklearn\')', name='valid_framework'),
+        CheckConstraint(
+            'status IN (\'draft\', \'queued\', \'training\', \'ready\', \'active\', \'failed\')', name='valid_status'),
+        CheckConstraint(
+            'accuracy IS NULL OR (accuracy >= 0 AND accuracy <= 100)', name='valid_accuracy'),
         Index('idx_models_task', 'task'),
         Index('idx_models_status', 'status'),
         Index('idx_models_framework', 'framework'),
@@ -138,8 +151,10 @@ class TrainingRun(Base):
     run_number = Column(Integer, autoincrement=True)
 
     # Relationships
-    model_id = Column(UUID(as_uuid=True), ForeignKey('models.id', ondelete='CASCADE'), nullable=False)
-    dataset_id = Column(UUID(as_uuid=True), ForeignKey('datasets.id', ondelete='SET NULL'))
+    model_id = Column(UUID(as_uuid=True), ForeignKey(
+        'models.id', ondelete='CASCADE'), nullable=False)
+    dataset_id = Column(UUID(as_uuid=True), ForeignKey(
+        'datasets.id', ondelete='SET NULL'))
 
     # Run configuration
     config = Column(JSONB, nullable=False)
@@ -171,19 +186,25 @@ class TrainingRun(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     started_at = Column(TIMESTAMP(timezone=True))
     completed_at = Column(TIMESTAMP(timezone=True))
-    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True),
+                        server_default=func.now(), onupdate=func.now())
 
     # Relationships
     model = relationship("Model", back_populates="training_runs")
     dataset = relationship("Dataset", back_populates="training_runs")
-    logs = relationship("TrainingLog", back_populates="training_run", cascade="all, delete-orphan")
-    version = relationship("ModelVersion", back_populates="training_run", uselist=False)
+    logs = relationship(
+        "TrainingLog", back_populates="training_run", cascade="all, delete-orphan")
+    version = relationship(
+        "ModelVersion", back_populates="training_run", uselist=False)
 
     # Constraints
     __table_args__ = (
-        CheckConstraint('status IN (\'pending\', \'queued\', \'running\', \'completed\', \'failed\', \'stopped\')', name='valid_status'),
-        CheckConstraint('progress >= 0 AND progress <= 100', name='valid_progress'),
-        CheckConstraint('current_epoch >= 0 AND (total_epochs IS NULL OR current_epoch <= total_epochs)', name='valid_epochs'),
+        CheckConstraint(
+            'status IN (\'pending\', \'queued\', \'running\', \'completed\', \'failed\', \'stopped\')', name='valid_status'),
+        CheckConstraint('progress >= 0 AND progress <= 100',
+                        name='valid_progress'),
+        CheckConstraint(
+            'current_epoch >= 0 AND (total_epochs IS NULL OR current_epoch <= total_epochs)', name='valid_epochs'),
         Index('idx_training_runs_model_id', 'model_id'),
         Index('idx_training_runs_status', 'status'),
         Index('idx_training_runs_created_at', 'created_at'),
@@ -200,7 +221,8 @@ class TrainingLog(Base):
     __tablename__ = "training_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    training_run_id = Column(UUID(as_uuid=True), ForeignKey('training_runs.id', ondelete='CASCADE'), nullable=False)
+    training_run_id = Column(UUID(as_uuid=True), ForeignKey(
+        'training_runs.id', ondelete='CASCADE'), nullable=False)
 
     # Log details
     log_level = Column(String(20), nullable=False)
@@ -218,7 +240,8 @@ class TrainingLog(Base):
 
     # Constraints
     __table_args__ = (
-        CheckConstraint('log_level IN (\'DEBUG\', \'INFO\', \'WARNING\', \'ERROR\', \'CRITICAL\')', name='valid_log_level'),
+        CheckConstraint(
+            'log_level IN (\'DEBUG\', \'INFO\', \'WARNING\', \'ERROR\', \'CRITICAL\')', name='valid_log_level'),
         Index('idx_training_logs_run_id', 'training_run_id', 'created_at'),
         Index('idx_training_logs_level', 'log_level'),
     )
@@ -233,8 +256,10 @@ class ModelVersion(Base):
     __tablename__ = "model_versions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    model_id = Column(UUID(as_uuid=True), ForeignKey('models.id', ondelete='CASCADE'), nullable=False)
-    training_run_id = Column(UUID(as_uuid=True), ForeignKey('training_runs.id', ondelete='SET NULL'))
+    model_id = Column(UUID(as_uuid=True), ForeignKey(
+        'models.id', ondelete='CASCADE'), nullable=False)
+    training_run_id = Column(UUID(as_uuid=True), ForeignKey(
+        'training_runs.id', ondelete='SET NULL'))
 
     version = Column(String(50), nullable=False)
     is_current = Column(Boolean, default=False)
@@ -278,10 +303,23 @@ class Job(Base):
 
     # Progress
     progress = Column(DECIMAL(5, 2), default=0)
+    current_iteration = Column(Integer, default=0)
+    total_iterations = Column(Integer, default=10)
+
+    # Training metrics
+    current_accuracy = Column(DECIMAL(10, 6))
+    best_accuracy = Column(DECIMAL(10, 6))
+    current_loss = Column(DECIMAL(10, 6))
+    best_loss = Column(DECIMAL(10, 6))
+    precision = Column(DECIMAL(10, 6))
+    recall = Column(DECIMAL(10, 6))
+    f1_score = Column(DECIMAL(10, 6))
 
     # Relationships
-    model_id = Column(UUID(as_uuid=True), ForeignKey('models.id', ondelete='CASCADE'))
-    dataset_id = Column(UUID(as_uuid=True), ForeignKey('datasets.id', ondelete='CASCADE'))
+    model_id = Column(UUID(as_uuid=True), ForeignKey(
+        'models.id', ondelete='CASCADE'))
+    dataset_id = Column(UUID(as_uuid=True), ForeignKey(
+        'datasets.id', ondelete='CASCADE'))
 
     # Job data
     config = Column(JSONB)
@@ -295,8 +333,10 @@ class Job(Base):
 
     # Constraints
     __table_args__ = (
-        CheckConstraint('status IN (\'pending\', \'running\', \'completed\', \'failed\')', name='valid_status'),
-        CheckConstraint('progress >= 0 AND progress <= 100', name='valid_progress'),
+        CheckConstraint(
+            'status IN (\'pending\', \'running\', \'completed\', \'failed\')', name='valid_status'),
+        CheckConstraint('progress >= 0 AND progress <= 100',
+                        name='valid_progress'),
         Index('idx_jobs_status', 'status'),
         Index('idx_jobs_type', 'job_type'),
         Index('idx_jobs_model_id', 'model_id'),

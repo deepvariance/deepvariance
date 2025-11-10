@@ -4,11 +4,12 @@ Uses GROQ API to generate and iteratively refine CNN architectures
 """
 
 import os
-from pathlib import Path
-from typing import Dict, Any, Optional, Callable
 import traceback
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional
 
-from ..base import BaseTrainingStrategy, TrainingConfig, TrainingResult, ProgressUpdate
+from ..base import (BaseTrainingStrategy, ProgressUpdate, TrainingConfig,
+                    TrainingResult)
 from ..core.llm_training import run_llm_training
 
 
@@ -76,7 +77,8 @@ class LLMStrategy(BaseTrainingStrategy):
         5. Return final metrics and model path
         """
         try:
-            print(f"[LLMStrategy] Starting training for model {config.model_id}")
+            print(
+                f"[LLMStrategy] Starting training for model {config.model_id}")
 
             # Report initial progress
             self._report_progress(
@@ -98,8 +100,14 @@ class LLMStrategy(BaseTrainingStrategy):
                         ProgressUpdate(
                             iteration=progress_dict['iteration'],
                             total_iterations=progress_dict['total_iterations'],
-                            current_accuracy=progress_dict.get('current_accuracy'),
+                            current_accuracy=progress_dict.get(
+                                'current_accuracy'),
                             best_accuracy=progress_dict.get('best_accuracy'),
+                            current_loss=progress_dict.get('current_loss'),
+                            best_loss=progress_dict.get('best_loss'),
+                            precision=progress_dict.get('precision'),
+                            recall=progress_dict.get('recall'),
+                            f1_score=progress_dict.get('f1_score'),
                             status=progress_dict.get('status', 'training'),
                             message=progress_dict.get('message', '')
                         )
@@ -120,7 +128,8 @@ class LLMStrategy(BaseTrainingStrategy):
             # Check if training succeeded
             if result['success']:
                 print(f"[LLMStrategy] Training completed successfully!")
-                print(f"[LLMStrategy] Final accuracy: {result['best_accuracy']:.4f}")
+                print(
+                    f"[LLMStrategy] Final accuracy: {result['best_accuracy']:.4f}")
                 print(f"[LLMStrategy] Model saved to: {result['model_path']}")
 
                 # Build TrainingResult

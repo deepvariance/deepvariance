@@ -3,16 +3,17 @@ Training Job Runner
 Background task runner using the plugin-based training pipeline
 """
 
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-import traceback
 
-from database import JobDB, ModelDB, DatasetDB
-from models import HyperparametersConfig, ModelTask
-from training_pipeline import TrainingOrchestrator, TrainingConfig, ProgressUpdate
-from job_logger import JobLogger
+from database import DatasetDB, JobDB, ModelDB
 from hardware_utils import get_optimal_device, log_device_info
+from job_logger import JobLogger
+from models import HyperparametersConfig, ModelTask
+from training_pipeline import (ProgressUpdate, TrainingConfig,
+                               TrainingOrchestrator)
 
 
 def run_training_job(
@@ -113,15 +114,18 @@ def run_training_job(
             """Update job progress in database"""
             try:
                 # Calculate overall progress percentage
-                progress_percent = (progress.iteration / progress.total_iterations) * 100
+                progress_percent = (progress.iteration /
+                                    progress.total_iterations) * 100
 
                 # Calculate time tracking
                 elapsed_seconds = int(time.time() - start_time)
 
                 # Estimate remaining time based on progress
                 if progress_percent > 0:
-                    total_estimated_seconds = int((elapsed_seconds / progress_percent) * 100)
-                    remaining_seconds = max(0, total_estimated_seconds - elapsed_seconds)
+                    total_estimated_seconds = int(
+                        (elapsed_seconds / progress_percent) * 100)
+                    remaining_seconds = max(
+                        0, total_estimated_seconds - elapsed_seconds)
                 else:
                     remaining_seconds = 0
 
@@ -135,10 +139,25 @@ def run_training_job(
                     "current_iteration": progress.iteration,
                     "total_iterations": progress.total_iterations,
                     "current_accuracy": progress.current_accuracy,
+                    "current_loss": progress.current_loss,
                 }
 
+                # Update best metrics
                 if progress.best_accuracy is not None:
                     update_data["best_accuracy"] = progress.best_accuracy
+
+                if progress.best_loss is not None:
+                    update_data["best_loss"] = progress.best_loss
+
+                # Update classification metrics
+                if progress.precision is not None:
+                    update_data["precision"] = progress.precision
+
+                if progress.recall is not None:
+                    update_data["recall"] = progress.recall
+
+                if progress.f1_score is not None:
+                    update_data["f1_score"] = progress.f1_score
 
                 if progress.status == 'failed':
                     update_data["status"] = "failed"
@@ -157,22 +176,36 @@ def run_training_job(
                 JobDB.update(job_id, update_data)
 
                 # Log progress (handle None values safely)
+                metrics_str = []
                 if progress.current_accuracy is not None:
-                    acc_str = f"{progress.current_accuracy:.4f}"
-                else:
-                    acc_str = 'N/A'
+                    metrics_str.append(f"Acc: {progress.current_accuracy:.4f}")
+                if progress.current_loss is not None:
+                    metrics_str.append(f"Loss: {progress.current_loss:.4f}")
+                if progress.precision is not None:
+                    metrics_str.append(f"Prec: {progress.precision:.4f}")
+                if progress.recall is not None:
+                    metrics_str.append(f"Rec: {progress.recall:.4f}")
+                if progress.f1_score is not None:
+                    metrics_str.append(f"F1: {progress.f1_score:.4f}")
 
-                logger.info(f"Iteration {progress.iteration}/{progress.total_iterations} - Accuracy: {acc_str} - Elapsed: {elapsed_time} - Remaining: {estimated_remaining}")
+                metrics_info = " | ".join(
+                    metrics_str) if metrics_str else "N/A"
+                logger.info(
+                    f"Iteration {progress.iteration}/{progress.total_iterations} - {metrics_info} - Elapsed: {elapsed_time} - Remaining: {estimated_remaining}")
 
                 if progress.best_accuracy is not None:
-                    logger.info(f"  Best accuracy so far: {progress.best_accuracy:.4f}")
+                    logger.info(
+                        f"  Best accuracy: {progress.best_accuracy:.4f}")
+                if progress.best_loss is not None:
+                    logger.info(f"  Best loss: {progress.best_loss:.4f}")
 
             except Exception as e:
                 logger.error(f"Error updating progress: {e}")
 
         # Execute training
         logger.info(f"Starting training with strategy: {strategy}")
-        logger.info(f"Hyperparameters: max_iterations={config.max_iterations}, target_accuracy={config.target_accuracy}")
+        logger.info(
+            f"Hyperparameters: max_iterations={config.max_iterations}, target_accuracy={config.target_accuracy}")
         result = orchestrator.train(config, progress_callback=on_progress)
 
         # Check if training succeeded
@@ -276,11 +309,13 @@ def _infer_num_classes(dataset_path: Path, dataset_domain: str) -> int:
         train_dir = dataset_path / 'train'
         if train_dir.exists() and train_dir.is_dir():
             # Count subdirectories (each is a class)
-            class_dirs = [d for d in train_dir.iterdir() if d.is_dir() and not d.name.startswith('.')]
+            class_dirs = [d for d in train_dir.iterdir(
+            ) if d.is_dir() and not d.name.startswith('.')]
             return len(class_dirs)
 
         # Fallback: count top-level directories
-        class_dirs = [d for d in dataset_path.iterdir() if d.is_dir() and not d.name.startswith('.')]
+        class_dirs = [d for d in dataset_path.iterdir(
+        ) if d.is_dir() and not d.name.startswith('.')]
         return max(len(class_dirs), 2)  # At least binary classification
 
     # Default for other domains

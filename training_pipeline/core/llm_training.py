@@ -1,26 +1,37 @@
 """
-LLM-Powered CNN Training Core
-Extracted and refactored from cnn_new.py for integration with plugin architecture
+Core LLM Training Module
+Handles LLM-powered CNN generation and training
 """
 
+import torchvision.transforms as transforms
+from typing import Any, Callable, Dict, Optional
+import random
 import importlib.util
 import json
 import os
-import random
 import re
+# Import metrics utilities
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Callable
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import psutil
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision.transforms as transforms
 from groq import Groq
 from torch.utils.data import DataLoader, random_split
+from torchvision import transforms
 from torchvision.datasets import ImageFolder
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+try:
+    from metrics_utils import evaluate_model_with_metrics as calc_metrics
+except ImportError:
+    calc_metrics = None
+    print("[WARNING] metrics_utils not found, metrics calculation will be limited")
 
 
 # === LLM System Prompt Template ===
@@ -94,12 +105,14 @@ def build_transforms(resize_to: tuple):
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
+                             0.229, 0.224, 0.225])
     ])
     val_transform = transforms.Compose([
         transforms.Resize(resize_to),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
+                             0.229, 0.224, 0.225])
     ])
     return train_transform, val_transform
 
@@ -123,7 +136,8 @@ def load_dataset(dataset_path: Path, resize_to: tuple = (224, 224), num_workers:
     )
 
     if len(full_dataset) == 0:
-        raise RuntimeError("No valid images found. Check dataset root and file extensions.")
+        raise RuntimeError(
+            "No valid images found. Check dataset root and file extensions.")
 
     # Random split 80/20 for train/validation
     num_images_total = len(full_dataset)
@@ -155,7 +169,8 @@ def load_dataset(dataset_path: Path, resize_to: tuple = (224, 224), num_workers:
         pin_memory=torch.cuda.is_available()
     )
 
-    print(f"[LLM Training] Image shape: {image_shape}, Classes: {num_classes}, Training images: {train_size}")
+    print(
+        f"[LLM Training] Image shape: {image_shape}, Classes: {num_classes}, Training images: {train_size}")
 
     return train_dataset, val_dataset, testloader, image_shape, num_classes, train_size
 
@@ -294,18 +309,20 @@ def load_model_from_code(model_code: str, model_file: Path):
         f.write(model_code)
 
     # Load module
-    spec = importlib.util.spec_from_file_location("generated_model", model_file)
+    spec = importlib.util.spec_from_file_location(
+        "generated_model", model_file)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
     if not hasattr(module, 'GeneratedCNN'):
-        raise AttributeError("Generated code must contain a class named 'GeneratedCNN'")
+        raise AttributeError(
+            "Generated code must contain a class named 'GeneratedCNN'")
 
     return module.GeneratedCNN
 
 
-def train_and_evaluate(model_cls, train_dataset, val_dataset, hyperparams: Dict, device: str = 'cpu'):
-    """Train model and return validation accuracy"""
+def train_and_evaluate(model_cls, train_dataset, val_dataset, hyperparams: Dict, device: str = 'cpu', num_classes: int = 10):
+    """Train model and return validation accuracy and metrics"""
     model = model_cls().to(device)
 
     # Create data loader
@@ -341,9 +358,11 @@ def train_and_evaluate(model_cls, train_dataset, val_dataset, hyperparams: Dict,
 
     # Training loop
     epochs = hyperparams.get('epochs', 3)
+    final_loss = 0.0
     for epoch in range(epochs):
         model.train()
         running_loss = 0.0
+        batch_count = 0
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
 
@@ -354,24 +373,49 @@ def train_and_evaluate(model_cls, train_dataset, val_dataset, hyperparams: Dict,
             optimizer.step()
 
             running_loss += loss.item()
+            batch_count += 1
 
-        avg_loss = running_loss / len(train_loader)
-        print(f"  Epoch {epoch + 1}/{epochs}, Loss: {avg_loss:.4f}")
+            # Limit batches per epoch for faster iteration
+            if batch_count > 300:
+                break
 
-    # Validation
-    model.eval()
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for inputs, labels in val_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            outputs = model(inputs)
-            _, predicted = torch.max(outputs, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
+        final_loss = running_loss / max(1, batch_count)
+        print(f"  Epoch {epoch + 1}/{epochs}, Loss: {final_loss:.4f}")
 
-    accuracy = correct / total
-    return accuracy
+    # Comprehensive validation with metrics
+    if calc_metrics is not None:
+        metrics = calc_metrics(model, val_loader, device,
+                               num_classes, criterion)
+        return {
+            'accuracy': metrics['accuracy'],
+            'loss': metrics['loss'],
+            'precision': metrics['precision'],
+            'recall': metrics['recall'],
+            'f1_score': metrics['f1_score'],
+        }
+    else:
+        # Fallback: simple accuracy calculation
+        model.eval()
+        correct = 0
+        total = 0
+        val_loss = 0.0
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                _, predicted = torch.max(outputs, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+        return {
+            'accuracy': correct / total if total > 0 else 0.0,
+            'loss': val_loss / len(val_loader) if len(val_loader) > 0 else 0.0,
+            'precision': None,
+            'recall': None,
+            'f1_score': None,
+        }
 
 
 def evaluate_with_metrics(model, testloader, device: str = 'cpu'):
@@ -452,7 +496,8 @@ def run_llm_training(
     """
     print(f"[LLM Training] Starting training for model {model_id}")
     print(f"[LLM Training] Dataset: {dataset_path}")
-    print(f"[LLM Training] Max iterations: {max_iterations}, Target: {target_accuracy}")
+    print(
+        f"[LLM Training] Max iterations: {max_iterations}, Target: {target_accuracy}")
 
     # Load dataset
     train_dataset, val_dataset, testloader, image_shape, num_classes, num_images = load_dataset(
@@ -489,7 +534,8 @@ def run_llm_training(
     experiment_history = []
 
     for iteration in range(max_iterations):
-        print(f"\n[LLM Training] === Iteration {iteration + 1}/{max_iterations} ===")
+        print(
+            f"\n[LLM Training] === Iteration {iteration + 1}/{max_iterations} ===")
 
         # Report progress
         if progress_callback:
@@ -504,7 +550,8 @@ def run_llm_training(
             })
 
         # Get hyperparameter suggestions
-        current_config = get_hyperparameter_suggestions(iteration, best_acc, best_config)
+        current_config = get_hyperparameter_suggestions(
+            iteration, best_acc, best_config)
         print(f"[LLM Training] Hyperparameters: {current_config}")
 
         try:
@@ -520,18 +567,59 @@ def run_llm_training(
             model_code = extract_python_code(raw_response)
 
             # Save generated model
-            generated_model_file = models_dir / f"generated_model_{model_id}.py"
+            generated_model_file = models_dir / \
+                f"generated_model_{model_id}.py"
             model_cls = load_model_from_code(model_code, generated_model_file)
             print(f"[LLM Training] Model code saved to {generated_model_file}")
 
             # Train and evaluate
             print(f"[LLM Training] Training model...")
-            acc = train_and_evaluate(model_cls, train_dataset, val_dataset, current_config, device)
-            print(f"[LLM Training] Validation accuracy: {acc:.4f}")
+            result = train_and_evaluate(
+                model_cls, train_dataset, val_dataset, current_config, device, num_classes)
+
+            acc = result['accuracy']
+            loss = result['loss']
+            precision = result.get('precision')
+            recall = result.get('recall')
+            f1_score = result.get('f1_score')
+
+            print(
+                f"[LLM Training] Validation - Acc: {acc:.4f}, Loss: {loss:.4f}")
+            if precision is not None:
+                print(
+                    f"[LLM Training] Metrics - Prec: {precision:.4f}, Rec: {recall:.4f}, F1: {f1_score:.4f}")
+
+            # Track best loss
+            if iteration == 0:
+                best_loss = loss
+            else:
+                best_loss = min(
+                    best_loss, loss) if loss is not None else best_loss
+
+            # Report progress with full metrics
+            if progress_callback:
+                progress_callback({
+                    'type': 'progress',
+                    'iteration': iteration + 1,
+                    'total_iterations': max_iterations,
+                    'current_accuracy': acc,
+                    'best_accuracy': max(best_acc, acc),
+                    'current_loss': loss,
+                    'best_loss': best_loss,
+                    'precision': precision,
+                    'recall': recall,
+                    'f1_score': f1_score,
+                    'status': 'training',
+                    'message': f'Iteration {iteration + 1}/{max_iterations} - Acc: {acc:.4f}'
+                })
 
             experiment_history.append({
                 'iteration': iteration + 1,
                 'accuracy': acc,
+                'loss': loss,
+                'precision': precision,
+                'recall': recall,
+                'f1_score': f1_score,
                 'config': current_config.copy(),
                 'success': True
             })
@@ -547,7 +635,8 @@ def run_llm_training(
 
             # Check if target reached
             if best_acc >= target_accuracy:
-                print(f"[LLM Training] Target accuracy {target_accuracy} reached!")
+                print(
+                    f"[LLM Training] Target accuracy {target_accuracy} reached!")
                 break
 
         except Exception as e:
@@ -584,8 +673,10 @@ def run_llm_training(
         metrics = evaluate_with_metrics(model, testloader, device)
 
         # Calculate stability
-        num_success = sum(1 for e in experiment_history if e.get('success', False))
-        stability = (num_success / len(experiment_history)) * 100 if experiment_history else 100.0
+        num_success = sum(
+            1 for e in experiment_history if e.get('success', False))
+        stability = (num_success / len(experiment_history)) * \
+            100 if experiment_history else 100.0
         metrics['Stability%'] = stability
 
         # Final progress callback
