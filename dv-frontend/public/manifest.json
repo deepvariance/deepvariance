@@ -1,0 +1,16 @@
+{
+  "name": "DeepVariance",
+  "short_name": "DeepVariance",
+  "description": "Research-first machine learning platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0F",
+  "theme_color": "#FF5C4D",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
