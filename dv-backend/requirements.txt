@@ -1,0 +1,30 @@
+# FastAPI and Web Server
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+
+# Data Validation
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# Deep Learning
+torch==2.5.1
+torchvision==0.20.1
+Pillow==10.4.0
+
+# AI/ML APIs
+groq==0.11.0
+
+# System Monitoring
+psutil==6.1.0
+
+# Optional: NVIDIA GPU monitoring
+# pynvml==11.5.0
+
+# Utilities
+python-dotenv==1.0.1
+
+# Database - PostgreSQL
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.1
