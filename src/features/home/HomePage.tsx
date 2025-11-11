@@ -16,7 +16,6 @@ import {
   IconUpload,
   IconBolt,
   IconDatabase,
-  IconStack2,
   IconChartBar,
   IconClock,
 } from '@tabler/icons-react'
@@ -26,6 +25,7 @@ import { useModels } from '@/shared/hooks/useModels'
 import { ImportDatasetModal } from '@/features/datasets/ImportDatasetModal'
 import { TrainModelModal } from '@/features/models/TrainModelModal'
 import { formatDate } from '@/shared/utils/formatters'
+import { BrainIcon } from '@/shared/components/BrainIcon'
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -164,13 +164,13 @@ export function HomePage() {
                   width: 56,
                   height: 56,
                   borderRadius: 12,
-                  backgroundColor: '#FFE8E6',
+                  backgroundColor: '#EEF2FF',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <IconStack2 size={28} color="#FF5C4D" />
+                <BrainIcon size={28} />
               </Box>
             </Group>
           </Card>
@@ -317,13 +317,13 @@ export function HomePage() {
                     width: 64,
                     height: 64,
                     borderRadius: 16,
-                    backgroundColor: '#FFE8E6',
+                    backgroundColor: '#EEF2FF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <IconBolt size={32} color="#FF5C4D" />
+                  <IconBolt size={32} color="#6366F1" />
                 </Box>
                 <div style={{ flex: 1 }}>
                   <Title order={3} size={22} fw={600} mb={6}>
@@ -339,10 +339,10 @@ export function HomePage() {
 
               <Stack gap={12}>
                 <Group gap={8}>
-                  <Badge variant="light" color="orange" size="lg">
+                  <Badge variant="light" color="indigo" size="lg">
                     Classification
                   </Badge>
-                  <Badge variant="light" color="orange" size="lg">
+                  <Badge variant="light" color="indigo" size="lg">
                     Detection
                   </Badge>
                 </Group>
@@ -354,12 +354,12 @@ export function HomePage() {
               <Button
                 size="lg"
                 leftSection={<IconBolt size={20} />}
-                color="orange"
+                color="indigo"
                 onClick={() => setTrainModalOpen(true)}
                 disabled={readyDatasets === 0}
                 styles={{
                   root: {
-                    backgroundColor: '#FF5C4D',
+                    backgroundColor: '#6366F1',
                     fontSize: '15px',
                     fontWeight: 600,
                     height: 48,
@@ -425,13 +425,13 @@ export function HomePage() {
                           width: 32,
                           height: 32,
                           borderRadius: 6,
-                          backgroundColor: '#FFE8E6',
+                          backgroundColor: '#EEF2FF',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                         }}
                       >
-                        <IconStack2 size={16} color="#FF5C4D" />
+                        <BrainIcon size={16} />
                       </Box>
                       <div>
                         <Text size="15px" fw={500}>
@@ -512,7 +512,7 @@ export function HomePage() {
                           width: 36,
                           height: 36,
                           borderRadius: 8,
-                          backgroundColor: item.type === 'dataset' ? '#E0F2FE' : '#FFE8E6',
+                          backgroundColor: item.type === 'dataset' ? '#E0F2FE' : '#EEF2FF',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -521,7 +521,7 @@ export function HomePage() {
                         {item.type === 'dataset' ? (
                           <IconDatabase size={18} color="#0284C7" />
                         ) : (
-                          <IconStack2 size={18} color="#FF5C4D" />
+                          <BrainIcon size={18} />
                         )}
                       </Box>
                       <div>
@@ -532,7 +532,7 @@ export function HomePage() {
                           <Badge
                             variant="light"
                             size="sm"
-                            color={item.type === 'dataset' ? 'blue' : 'orange'}
+                            color={item.type === 'dataset' ? 'blue' : 'indigo'}
                           >
                             {item.type === 'dataset' ? 'Dataset' : 'Model'}
                           </Badge>

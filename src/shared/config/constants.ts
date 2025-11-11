@@ -11,7 +11,7 @@ export const ROUTES = {
 
 // Theme colors
 export const COLORS = {
-  PRIMARY: '#FF5C4D',
+  PRIMARY: '#6366F1',
   SUCCESS: '#4CAF50',
   WARNING: '#FF9800',
   ERROR: '#EF4444',

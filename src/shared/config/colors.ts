@@ -1,13 +1,13 @@
 /**
  * Color constants used throughout the application
- * Maintains consistency with the DeepVariance orange theme
+ * Maintains consistency with the DeepVariance indigo theme
  */
 
 export const COLORS = {
   // Primary brand colors
-  PRIMARY: '#FF5C4D',
-  PRIMARY_LIGHT: '#FFF5F4',
-  PRIMARY_HOVER: '#FFE8E6',
+  PRIMARY: '#6366F1',
+  PRIMARY_LIGHT: '#EEF2FF',
+  PRIMARY_HOVER: '#E0E7FF',
 
   // Neutral colors
   GRAY_50: '#F9FAFB',

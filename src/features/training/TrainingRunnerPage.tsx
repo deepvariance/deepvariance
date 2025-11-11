@@ -163,7 +163,7 @@ export function TrainingRunnerPage() {
     return (
       <Stack gap={0} style={{ minHeight: '100vh', backgroundColor: '#FAFAFA' }}>
         <Center h="100vh">
-          <Loader size="lg" color="#FF5C4D" />
+          <Loader size="lg" color="#6366F1" />
         </Center>
       </Stack>
     )

@@ -24,7 +24,8 @@
       "Bash(timeout 300 python:*)",
       "Bash(python:*)",
       "Bash(pip show:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

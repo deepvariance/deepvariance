@@ -102,12 +102,12 @@ export function DatasetsPage() {
           </div>
           <Button
             leftSection={<IconPlus size={18} />}
-            color="orange"
+            color="indigo"
             size="md"
             onClick={() => setImportModalOpen(true)}
             styles={{
               root: {
-                backgroundColor: '#FF5C4D',
+                backgroundColor: '#6366F1',
                 fontSize: '15px',
                 fontWeight: 500,
                 paddingLeft: 20,
@@ -205,7 +205,7 @@ export function DatasetsPage() {
             }}
           >
             <Stack align="center" gap={16}>
-              <Loader size="lg" color="orange" />
+              <Loader size="lg" color="indigo" />
               <Text size="15px" c="dimmed">
                 Loading datasets...
               </Text>

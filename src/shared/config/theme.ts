@@ -1,22 +1,22 @@
 import { createTheme, MantineColorsTuple, rem } from '@mantine/core'
 
-const deepVarianceOrange: MantineColorsTuple = [
-  '#FFF5F4',
-  '#FFE8E6',
-  '#FFD4D0',
-  '#FFBFBA',
-  '#FFA9A3',
-  '#FF5C4D',
-  '#E65443',
-  '#CC4B3B',
-  '#B34333',
-  '#993A2B',
+const deepVarianceIndigo: MantineColorsTuple = [
+  '#EEF2FF',
+  '#E0E7FF',
+  '#C7D2FE',
+  '#A5B4FC',
+  '#818CF8',
+  '#6366F1',
+  '#4F46E5',
+  '#4338CA',
+  '#3730A3',
+  '#312E81',
 ]
 
 export const theme = createTheme({
-  primaryColor: 'orange',
+  primaryColor: 'indigo',
   colors: {
-    orange: deepVarianceOrange,
+    indigo: deepVarianceIndigo,
   },
 
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',

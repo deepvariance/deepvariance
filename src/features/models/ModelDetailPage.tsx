@@ -198,7 +198,7 @@ export function ModelDetailPage() {
             )}
             <Button
               variant="light"
-              color="orange"
+              color="indigo"
               leftSection={<IconDownload size={18} />}
               styles={{
                 root: {
@@ -210,7 +210,7 @@ export function ModelDetailPage() {
               Download
             </Button>
             <Button
-              color="orange"
+              color="indigo"
               leftSection={<IconRocket size={18} />}
               styles={{
                 root: {
@@ -322,7 +322,7 @@ export function ModelDetailPage() {
                       </Button>
                       <Button
                         variant="light"
-                        color="orange"
+                        color="indigo"
                         size="sm"
                         leftSection={<IconCheck size={16} />}
                         onClick={() => {
@@ -444,7 +444,7 @@ export function ModelDetailPage() {
                           <ActionIcon
                             size="sm"
                             variant="subtle"
-                            color="orange"
+                            color="indigo"
                             onClick={() => navigate(`/datasets/${model.dataset_id}`)}
                           >
                             <IconExternalLink size={14} />
@@ -939,7 +939,7 @@ print(response.json())`}
                     <Table.Td>
                       <Group gap={8}>
                         <IconCircleMinus size={16} color={COLORS.WARNING} />
-                        <Badge variant="light" color="orange" size="sm">
+                        <Badge variant="light" color="indigo" size="sm">
                           Stopped
                         </Badge>
                       </Group>

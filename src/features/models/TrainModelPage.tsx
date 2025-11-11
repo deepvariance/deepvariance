@@ -194,7 +194,7 @@ export function TrainModelPage() {
                     borderRadius: 6,
                   }}
                 >
-                  <Loader size="sm" color="#FF5C4D" />
+                  <Loader size="sm" color="#6366F1" />
                 </Box>
               ) : error ? (
                 <Alert
@@ -206,7 +206,7 @@ export function TrainModelPage() {
                   {error instanceof Error ? error.message : 'Failed to fetch datasets'}
                 </Alert>
               ) : datasets.length === 0 ? (
-                <Alert icon={<IconAlertCircle size={16} />} color="orange" variant="light">
+                <Alert icon={<IconAlertCircle size={16} />} color="indigo" variant="light">
                   No ready datasets available. Please upload a dataset first.
                 </Alert>
               ) : (
@@ -239,14 +239,14 @@ export function TrainModelPage() {
               </Button>
               <Button
                 leftSection={!isSubmitting && <IconBolt size={18} />}
-                color="orange"
+                color="indigo"
                 size="md"
                 disabled={!isFormValid || isSubmitting}
                 loading={isSubmitting}
                 onClick={handleStartTraining}
                 styles={{
                   root: {
-                    backgroundColor: '#FF5C4D',
+                    backgroundColor: '#6366F1',
                     fontSize: '15px',
                     fontWeight: 500,
                   },

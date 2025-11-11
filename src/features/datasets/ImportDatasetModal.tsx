@@ -134,7 +134,7 @@ export function ImportDatasetModal({ opened, onClose }: ImportDatasetModalProps)
                 {uploadProgress}%
               </Text>
             </Group>
-            <Progress value={uploadProgress} size="sm" color="orange" animated />
+            <Progress value={uploadProgress} size="sm" color="indigo" animated />
           </Stack>
         )}
 
@@ -222,10 +222,10 @@ export function ImportDatasetModal({ opened, onClose }: ImportDatasetModalProps)
             onClick={handleImport}
             loading={isCreating}
             leftSection={!isCreating && <IconUpload size={16} />}
-            color="orange"
+            color="indigo"
             styles={{
               root: {
-                backgroundColor: '#FF5C4D',
+                backgroundColor: '#6366F1',
                 fontSize: '15px',
               },
             }}

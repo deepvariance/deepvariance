@@ -17,7 +17,7 @@ import {
   Tooltip,
   Modal,
 } from '@mantine/core'
-import { IconPlus, IconSearch, IconStack2, IconAlertCircle, IconTrash } from '@tabler/icons-react'
+import { IconPlus, IconSearch, IconAlertCircle, IconTrash } from '@tabler/icons-react'
 import { useNavigate } from 'react-router-dom'
 import { notifications } from '@mantine/notifications'
 import { useModels, useDeleteModel } from '@/shared/hooks/useModels'
@@ -25,6 +25,7 @@ import { formatDate } from '@/shared/utils/formatters'
 import type { Model } from '@/shared/api/models'
 import { TrainModelModal } from './TrainModelModal'
 import { TrainingProgress } from './TrainingProgress'
+import { BrainIcon } from '@/shared/components/BrainIcon'
 
 const taskColors: Record<string, string> = {
   classification: 'blue',
@@ -117,12 +118,12 @@ export function ModelsPage() {
           </div>
           <Button
             leftSection={<IconPlus size={18} />}
-            color="orange"
+            color="indigo"
             size="md"
             onClick={() => setTrainModalOpen(true)}
             styles={{
               root: {
-                backgroundColor: '#FF5C4D',
+                backgroundColor: '#6366F1',
                 fontSize: '15px',
                 fontWeight: 500,
                 paddingLeft: 20,
@@ -238,7 +239,7 @@ export function ModelsPage() {
                 <Table.Tr>
                   <Table.Td colSpan={7}>
                     <Center py="xl">
-                      <Loader size="md" color="#FF5C4D" />
+                      <Loader size="md" color="#6366F1" />
                     </Center>
                   </Table.Td>
                 </Table.Tr>
@@ -277,13 +278,13 @@ export function ModelsPage() {
                             width: 32,
                             height: 32,
                             borderRadius: 6,
-                            backgroundColor: '#FFE8E6',
+                            backgroundColor: '#EEF2FF',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                           }}
                         >
-                          <IconStack2 size={16} color="#FF5C4D" />
+                          <BrainIcon size={16} />
                         </Box>
                         <Text size="15px" fw={500}>
                           {model.name}

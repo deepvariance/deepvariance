@@ -17,9 +17,9 @@ import {
   IconHome,
   IconPlugConnected,
   IconRocket,
-  IconStack2,
 } from '@tabler/icons-react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { BrainIcon } from './BrainIcon'
 
 export function AppSidebar() {
   const location = useLocation()
@@ -37,7 +37,7 @@ export function AppSidebar() {
       type: 'category' as const,
       label: 'TRAINING',
       items: [
-        { label: 'Models', icon: IconStack2, path: ROUTES.MODELS },
+        { label: 'Models', icon: 'BrainIcon', path: ROUTES.MODELS },
         { label: 'Deployments', icon: IconRocket, path: '/deployments' },
       ],
     },
@@ -68,10 +68,9 @@ export function AppSidebar() {
   ]
 
   const renderNavItem = (
-    item: { label: string; icon: typeof IconHome; path: string },
+    item: { label: string; icon: typeof IconHome | string; path: string },
     key: string
   ) => {
-    const Icon = item.icon
     const isActive =
       item.path === ROUTES.HOME
         ? location.pathname === item.path
@@ -128,11 +127,23 @@ export function AppSidebar() {
             marginLeft: '12px',
           }}
         >
-          <Icon
-            size={20}
-            color={isActive ? COLORS.PRIMARY : COLORS.GRAY_500}
-            style={{ flexShrink: 0 }}
-          />
+          {item.icon === 'BrainIcon' ? (
+            <BrainIcon
+              size={20}
+              color={isActive ? COLORS.PRIMARY : COLORS.GRAY_500}
+            />
+          ) : (
+            (() => {
+              const Icon = item.icon as typeof IconHome
+              return (
+                <Icon
+                  size={20}
+                  color={isActive ? COLORS.PRIMARY : COLORS.GRAY_500}
+                  style={{ flexShrink: 0 }}
+                />
+              )
+            })()
+          )}
           {sidebarOpen && (
             <Text
               size="15px"

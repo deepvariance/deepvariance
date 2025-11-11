@@ -112,7 +112,7 @@ export function DatasetSelector({
                 <Text size="15px" fw={600} c={COLORS.PRIMARY}>
                   {selectedData.label}
                 </Text>
-                <Badge size="sm" variant="light" color="orange" styles={BADGE_STYLES.gcsLabel}>
+                <Badge size="sm" variant="light" color="indigo" styles={BADGE_STYLES.gcsLabel}>
                   {selectedData.storage}
                 </Badge>
               </Group>

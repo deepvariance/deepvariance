@@ -48,7 +48,7 @@ function DatasetBreadcrumbs({ items }: { items: BreadcrumbItem[] }) {
             onClick={item.onClick}
             style={{
               cursor: 'pointer',
-              color: '#FF5C4D',
+              color: '#6366F1',
               textDecoration: 'none',
               fontSize: '14px',
             }}
@@ -77,7 +77,7 @@ function LoadingState() {
           }}
         >
           <Stack align="center" gap={16}>
-            <Loader size="lg" color="orange" />
+            <Loader size="lg" color="indigo" />
             <Text size="15px" c="dimmed">
               Loading dataset details...
             </Text>
