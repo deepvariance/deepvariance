@@ -53,13 +53,6 @@ DATABASE_URL=postgresql://deepvariance:deepvariance@localhost:5432/deepvariance
 GROQ_API_KEY=your_groq_api_key_here
 ```
 
-## Documentation
-
-- [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) - Implementation tracking
-- [POSTGRESQL_SETUP.md](POSTGRESQL_SETUP.md) - Database setup guide
-- [DATASET_REQUIREMENTS.md](DATASET_REQUIREMENTS.md) - Dataset validation rules
-- Interactive API Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
-
 ## License
 
 © 2025 DeepVariance. All rights reserved.
