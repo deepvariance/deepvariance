@@ -3,16 +3,17 @@ Test script for the training pipeline
 Creates a minimal dataset and tests the complete flow
 """
 
+from training_pipeline import TrainingConfig, TrainingOrchestrator
 import os
 import shutil
 from pathlib import Path
-from PIL import Image
+
 import numpy as np
+from PIL import Image
 
 # Set GROQ API key
-os.environ['GROQ_API_KEY'] = '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'
+os.environ['GROQ_API_KEY'] = 'your_api_key_here'
 
-from training_pipeline import TrainingConfig, TrainingOrchestrator
 
 def create_test_dataset():
     """Create a minimal test dataset with 2 classes and 10 images per class"""
@@ -94,7 +95,8 @@ def test_training_pipeline():
 
     try:
         # Run training
-        result = orchestrator.train(config, progress_callback=progress_callback)
+        result = orchestrator.train(
+            config, progress_callback=progress_callback)
 
         print("\n" + "="*60)
         print("Training Results")
@@ -103,8 +105,10 @@ def test_training_pipeline():
         if result.success:
             print("\n✅ Training completed successfully!")
             print(f"\n📈 Final Results:")
-            print(f"  Accuracy: {result.final_accuracy:.4f}" if result.final_accuracy else "  Accuracy: N/A")
-            print(f"  Best accuracy: {result.best_accuracy:.4f}" if result.best_accuracy else "  Best accuracy: N/A")
+            print(
+                f"  Accuracy: {result.final_accuracy:.4f}" if result.final_accuracy else "  Accuracy: N/A")
+            print(
+                f"  Best accuracy: {result.best_accuracy:.4f}" if result.best_accuracy else "  Best accuracy: N/A")
             print(f"  Model path: {result.model_path}")
 
             if result.hyperparameters:

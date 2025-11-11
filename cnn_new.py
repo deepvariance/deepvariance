@@ -20,7 +20,7 @@ from torchvision.datasets import ImageFolder
 
 # === Configure Groq client ===
 _groq_key = os.getenv(
-    "GROQ_API_KEY", "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")
+    "GROQ_API_KEY", "your_api_key_here")
 client = Groq(api_key=_groq_key)
 
 # ensure a valid directory exists
